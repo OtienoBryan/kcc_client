@@ -42,27 +42,38 @@ const AddRouteModal: React.FC<{
     name: '',
     region: 0,
     region_name: '',
-    country_id: 0,
-    country_name: '',
+    country_id: 1, // Default to Kenya (ID = 1)
+    country_name: 'Kenya',
     sales_rep_id: 0,
     sales_rep_name: '',
     status: 1,
   });
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      // Set Kenya as default when modal opens
+      const kenya = countries.find(c => c.id === 1 || c.name.toLowerCase() === 'kenya');
+      if (kenya) {
+        setForm(prev => ({ 
+          ...prev,
+          country_id: kenya.id, 
+          country_name: kenya.name 
+        }));
+        onCountryChange(kenya.id.toString());
+      }
+    } else {
       setForm({ 
         name: '', 
         region: 0, 
         region_name: '', 
-        country_id: 0, 
-        country_name: '', 
+        country_id: 1, 
+        country_name: 'Kenya', 
         sales_rep_id: 0, 
         sales_rep_name: '', 
         status: 1 
       });
     }
-  }, [isOpen]);
+  }, [isOpen, countries, onCountryChange]);
 
   if (!isOpen) return null;
   
@@ -88,30 +99,6 @@ const AddRouteModal: React.FC<{
           </div>
           
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Country</label>
-            <select 
-              value={form.country_id} 
-              onChange={e => { 
-                const country = countries.find(c => c.id === parseInt(e.target.value));
-                setForm(f => ({ 
-                  ...f, 
-                  country_id: parseInt(e.target.value), 
-                  country_name: country?.name || '',
-                  region: 0,
-                  region_name: ''
-                })); 
-                onCountryChange(e.target.value); 
-              }} 
-              className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-            >
-              <option value="">Select country</option>
-              {countries.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Region</label>
             <select 
               value={form.region} 
@@ -124,9 +111,8 @@ const AddRouteModal: React.FC<{
                 })); 
               }} 
               className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" 
-              disabled={!form.country_id}
             >
-              <option value="">{form.country_id ? 'Select region' : 'Select country first'}</option>
+              <option value="">Select region</option>
               {regions.map(r => (
                 <option key={r.id} value={r.id}>{r.name}</option>
               ))}
@@ -219,7 +205,14 @@ const RoutesPage: React.FC = () => {
     if (modalOpen || editModalOpen) {
       getWithAuth('/api/sales/countries')
         .then(res => res.json())
-        .then(data => setCountries(data))
+        .then(data => {
+          setCountries(data);
+          // Set Kenya as default country
+          const kenya = data.find((c: Country) => c.id === 1 || c.name.toLowerCase() === 'kenya');
+          if (kenya && modalOpen) {
+            setSelectedCountry(kenya.id.toString());
+          }
+        })
         .catch(err => console.error('Failed to fetch countries:', err));
       
       getWithAuth('/api/sales-reps?status=1')
@@ -233,22 +226,33 @@ const RoutesPage: React.FC = () => {
     }
   }, [modalOpen, editModalOpen]);
 
-  // Fetch regions when selectedCountry changes
+  // Ensure edit route has Kenya set when countries are loaded
   useEffect(() => {
-    if (selectedCountry) {
-      const countryObj = countries.find(c => c.id === parseInt(selectedCountry));
-      if (countryObj) {
-        getWithAuth(`/api/sales/regions?country_id=${countryObj.id}`)
+    if (editModalOpen && editRoute && countries.length > 0) {
+      const kenya = countries.find(c => c.id === 1 || c.name.toLowerCase() === 'kenya');
+      if (kenya && editRoute.country_id !== kenya.id) {
+        setEditRoute({
+          ...editRoute,
+          country_id: kenya.id,
+          country_name: kenya.name
+        });
+        setSelectedCountry(kenya.id.toString());
+      }
+    }
+  }, [editModalOpen, editRoute, countries]);
+
+  // Fetch regions for Kenya (ID = 1) when modal opens or when selectedCountry changes
+  useEffect(() => {
+    if (modalOpen || editModalOpen) {
+      const countryId = editModalOpen && editRoute ? editRoute.country_id : (selectedCountry ? parseInt(selectedCountry) : 1);
+      if (countryId) {
+        getWithAuth(`/api/sales/regions?country_id=${countryId}`)
           .then(res => res.json())
           .then(data => setRegions(data))
           .catch(err => console.error('Failed to fetch regions:', err));
-      } else {
-        setRegions([]);
       }
-    } else {
-      setRegions([]);
     }
-  }, [selectedCountry, countries]);
+  }, [selectedCountry, countries, modalOpen, editModalOpen, editRoute]);
 
   const fetchRoutes = async (pageNum = page, pageLimit = limit, searchTerm = search) => {
     setLoading(true);
@@ -307,10 +311,17 @@ const RoutesPage: React.FC = () => {
   };
 
   const handleEditClick = (route: Route) => {
-    setEditRoute(route);
+    // Ensure country is set to Kenya
+    const kenya = countries.find(c => c.id === 1 || c.name.toLowerCase() === 'kenya');
+    setEditRoute({
+      ...route,
+      country_id: kenya?.id || 1,
+      country_name: kenya?.name || 'Kenya'
+    });
     setEditModalOpen(true);
     setEditError(null);
-    setSelectedCountry(route.country_id.toString());
+    // Set selected country for region fetching
+    setSelectedCountry((kenya?.id || 1).toString());
   };
 
   const handleEditSave = async (updated: Route) => {
@@ -557,30 +568,6 @@ const RoutesPage: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Country</label>
-                <select
-                  value={editRoute.country_id}
-                  onChange={e => {
-                    const country = countries.find(c => c.id === parseInt(e.target.value));
-                    setEditRoute({ 
-                      ...editRoute, 
-                      country_id: parseInt(e.target.value), 
-                      country_name: country?.name || '',
-                      region: 0,
-                      region_name: ''
-                    });
-                    setSelectedCountry(e.target.value);
-                  }}
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                >
-                  <option value="">Select country</option>
-                  {countries.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Region</label>
                 <select
                   value={editRoute.region}
@@ -592,10 +579,9 @@ const RoutesPage: React.FC = () => {
                       region_name: region?.name || ''
                     });
                   }}
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                  disabled={!editRoute.country_id}
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors" 
                 >
-                  <option value="">{editRoute.country_id ? 'Select region' : 'Select country first'}</option>
+                  <option value="">Select region</option>
                   {regions.map(r => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
