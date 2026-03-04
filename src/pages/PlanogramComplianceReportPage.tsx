@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { DateTime } from 'luxon';
@@ -37,6 +38,7 @@ interface PaginationInfo {
   total: number;
   totalPages: number;
 }
+
 
 const PlanogramComplianceReportPage: React.FC = () => {
   const { user } = useAuth();
@@ -241,6 +243,15 @@ const PlanogramComplianceReportPage: React.FC = () => {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
+  const handleOpenSummaryPage = () => {
+    navigate('/planogram-compliance-outlet-summary', {
+      state: {
+        startDate,
+        endDate,
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
@@ -266,6 +277,13 @@ const PlanogramComplianceReportPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenSummaryPage}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-300 rounded-lg hover:bg-blue-100"
+              >
+                <BarChart3 className="w-3 h-3" />
+                Outlet Summary
+              </button>
               <button
                 onClick={() => setIsFilterModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -579,6 +597,7 @@ const PlanogramComplianceReportPage: React.FC = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

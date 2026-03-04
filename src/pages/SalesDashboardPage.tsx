@@ -109,7 +109,7 @@ const SalesDashboardPage: React.FC = () => {
   const [managers, setManagers] = useState<any[]>([]);
   const [pendingLeavesCount, setPendingLeavesCount] = useState(0);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
-  const [productPerf, setProductPerf] = useState<any[]>([]);
+  const [outletsVisited, setOutletsVisited] = useState<{ month: string; outlets: number }[]>([]);
 
   // Checked-in reps modal
   const [activeRepsModalOpen, setActiveRepsModalOpen] = useState(false);
@@ -160,26 +160,9 @@ const SalesDashboardPage: React.FC = () => {
   /* ── charts data ── */
   const fetchChartsData = useCallback(async () => {
     try {
-      const [vapesResult, pouchesResult] = await Promise.all([
-        fetchData('/dashboard/product-performance', { productType: 'vape' }),
-        fetchData('/dashboard/product-performance', { productType: 'pouch' }),
-      ]);
-      if (vapesResult.success && pouchesResult.success) {
-        const vapes = vapesResult.data || [];
-        const pouches = pouchesResult.data || [];
-        const allNames = Array.from(new Set([
-          ...vapes.map((p: any) => p.product_name),
-          ...pouches.map((p: any) => p.product_name),
-        ]));
-        setProductPerf(allNames.map((name: string) => {
-          const v = vapes.find((p: any) => p.product_name === name) || {};
-          const p = pouches.find((p: any) => p.product_name === name) || {};
-          return {
-            product_name: name,
-            vapes_sales_value: Number((v as any).total_sales_value) || 0,
-            pouches_sales_value: Number((p as any).total_sales_value) || 0,
-          };
-        }));
+      const outletsResult = await fetchData('/dashboard/outlets-visited');
+      if (outletsResult.success && outletsResult.data) {
+        setOutletsVisited(outletsResult.data || []);
       }
     } catch {
       // charts are non-critical
@@ -359,7 +342,7 @@ const SalesDashboardPage: React.FC = () => {
           <StatCard
             title="Avg Performance"
             value={`${stats.avgPerformance}%`}
-            icon={<TrendingUpIcon className="h-4 w-4 text-white" />}
+            icon={<TrendingUpIcon className="h-5 w-5 text-white" />}
             gradient="bg-gradient-to-br from-orange-500 to-orange-700"
             onClick={() => navigate('/shared-performance')}
             subText="Overall score"
@@ -441,42 +424,117 @@ const SalesDashboardPage: React.FC = () => {
             )}
           </div>
 
-          {/* Product Performance */}
+          {/* Outlets Visited */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Product Performance</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Vapes vs Pouches sales value</p>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                  <MapPinIcon className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">Outlets Visited</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Unique outlets visited per month</p>
+                </div>
               </div>
-              <button
-                onClick={() => navigate('/dashboard/reports/product-performance')}
-                className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 px-2.5 py-1.5 rounded-lg transition-colors"
-              >
-                Details <ChevronRightIcon className="h-3 w-3" />
-              </button>
+              {outletsVisited.length > 0 && (
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-indigo-600">
+                    {outletsVisited.reduce((sum, item) => sum + item.outlets, 0).toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-gray-400">Total outlets</p>
+                </div>
+              )}
             </div>
             {chartsLoading ? (
               <div className="h-52 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-500 border-t-transparent" />
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent" />
               </div>
-            ) : productPerf.length > 0 ? (
+            ) : outletsVisited.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={productPerf} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis dataKey="product_name" angle={-30} textAnchor="end" interval={0} height={70} stroke="#9ca3af" tick={{ fontSize: 10 }} />
-                  <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 12 }}
+                <BarChart data={outletsVisited} margin={{ top: 12, right: 20, left: -10, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="outletsBarGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                    </linearGradient>
+                    <linearGradient id="outletsBarGradientHover" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#818cf8" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.9} />
+                    </linearGradient>
+                    <filter id="outletsShadow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+                      <feOffset dx="0" dy="2" result="offsetblur" />
+                      <feComponentTransfer>
+                        <feFuncA type="linear" slope="0.3" />
+                      </feComponentTransfer>
+                      <feMerge>
+                        <feMergeNode />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#6b7280" 
+                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                    angle={-35}
+                    textAnchor="end"
+                    height={60}
                   />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="vapes_sales_value" fill="#6366f1" name="Vapes" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="pouches_sales_value" fill="#10b981" name="Pouches" radius={[4, 4, 0, 0]} />
+                  <YAxis 
+                    stroke="#6b7280" 
+                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => v.toLocaleString()}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3">
+                            <p className="text-xs font-semibold text-gray-600 mb-1">{payload[0].payload.month}</p>
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+                              <p className="text-sm font-bold text-gray-900">
+                                {payload[0].value?.toLocaleString()} <span className="text-xs font-normal text-gray-500">outlets</span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="outlets" 
+                    fill="url(#outletsBarGradient)" 
+                    radius={[8, 8, 0, 0]}
+                    filter="url(#outletsShadow)"
+                  >
+                    {outletsVisited.map((entry: any, index: number) => {
+                      const maxValue = Math.max(...outletsVisited.map((e: any) => e.outlets));
+                      const isMax = entry.outlets === maxValue;
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={isMax ? "url(#outletsBarGradientHover)" : "url(#outletsBarGradient)"}
+                        />
+                      );
+                    })}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-52 flex flex-col items-center justify-center text-gray-400">
-                <BarChart3Icon className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-xs">No product data available</p>
+                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <MapPinIcon className="h-8 w-8 opacity-40" />
+                </div>
+                <p className="text-xs font-medium">No outlets visited data available</p>
+                <p className="text-[10px] text-gray-400 mt-1">Data will appear here once visits are recorded</p>
               </div>
             )}
           </div>

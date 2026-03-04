@@ -114,6 +114,7 @@ import CompetitorActivityReportPage from './pages/CompetitorActivityReportPage';
 import PriceComplianceReportPage from './pages/PriceComplianceReportPage';
 import SosReportPage from './pages/SosReportPage';
 import PlanogramComplianceReportPage from './pages/PlanogramComplianceReportPage';
+import PlanogramComplianceOutletSummaryPage from './pages/PlanogramComplianceOutletSummaryPage';
 import VisitsIndexPage from './pages/VisitsIndexPage';
 import SalesRepLeavesPage from './pages/SalesRepLeavesPage';
 import SalesRepWorkingDaysPage from './pages/SalesRepWorkingDaysPage';
@@ -730,6 +731,7 @@ const App = () => {
             <Route path="/price-compliance-report" element={<PriceComplianceReportPage />} />
             <Route path="/sos-report" element={<SosReportPage />} />
             <Route path="/planogram-compliance-report" element={<PlanogramComplianceReportPage />} />
+            <Route path="/planogram-compliance-outlet-summary" element={<PlanogramComplianceOutletSummaryPage />} />
             <Route path="/client-activity" element={<ClientActivityPage />} />
             <Route path="/assets" element={
               <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive']} fallbackPath="/sales-dashboard">
