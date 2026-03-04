@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { clientService } from '../services/clientService';
+import { clientService, Client as ApiClient } from '../services/clientService';
 import {
   Search,
   Plus,
@@ -28,7 +28,7 @@ interface Client {
   latitude?: number;
   longitude?: number;
   balance?: number;
-  email?: string;
+  email: string;
   region_id: number;
   region: string;
   region_name?: string;
@@ -197,7 +197,7 @@ const AddClientModal: React.FC<{
               <label className="block text-sm font-medium text-gray-700 mb-1">Outlet Account</label>
               <select
                 value={form.outlet_account || 0}
-                onChange={e => setForm(f => ({ ...f, outlet_account: parseInt(e.target.value, 10) }))}
+                onChange={e => setForm(f => ({ ...f, outlet_account: parseInt(e.target.value, 10) || undefined }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
               >
                 <option value={0}>Not assigned</option>
@@ -591,7 +591,24 @@ const ClientsListPage: React.FC = () => {
   const handleAdd = async (data: Omit<Client, 'id' | 'created_at'>) => {
     setSubmitting(true);
     try {
-      await clientService.createClient(data);
+      const payload: any = {
+        name: data.name,
+        email: data.email,
+        address: data.address,
+        contact: data.contact,
+        tax_pin: data.tax_pin,
+        credit_limit: data.credit_limit !== undefined ? String(data.credit_limit) : undefined,
+        payment_terms: data.payment_terms,
+        countryId: data.countryId,
+        region_id: data.region_id,
+        route_id: data.route_id,
+        route_id_update: data.route_id_update,
+        status: data.status,
+        client_type: data.client_type,
+        outlet_account: data.outlet_account,
+      };
+
+      await clientService.createClient(payload);
       setModalOpen(false);
       await fetchClients();
     } catch (err: any) {
@@ -770,7 +787,7 @@ const ClientsListPage: React.FC = () => {
                         <div className="text-xs text-gray-900">{client.region_name || client.region || 'No region'}</div>
                       </td>
                       <td className="px-4 py-2">
-                        <div className="text-xs text-gray-900">{client.route_name_update || 'No route'}</div>
+                        <div className="text-xs text-gray-900">{client.route_name || client.route_name_update || 'No route'}</div>
                       </td>
                       <td className="px-4 py-2">
                         <span className="text-xs text-gray-900">{client.client_type_name || 'Not assigned'}</span>
