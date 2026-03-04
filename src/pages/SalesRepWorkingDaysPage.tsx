@@ -3,7 +3,7 @@ import axios from 'axios';
 import { salesService, SalesRep, Country } from '../services/salesService';
 import { saveAs } from 'file-saver';
 import { Link } from 'react-router-dom';
-import { Calendar, Users, TrendingUp, Filter, Download, BarChart3, Activity, Clock, UserCheck, UserX, FileText } from 'lucide-react';
+import { Calendar, Users, TrendingUp, Filter, Download, BarChart3, Activity, Clock, UserCheck, UserX, FileText, AlarmClock, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -29,6 +29,17 @@ interface Leave {
   status: string | number;
 }
 
+interface LateDayDetail {
+  date: string;         // yyyy-mm-dd
+  firstLoginTime: string; // formatted local time string
+  minutesLate: number;
+}
+
+interface LateDaysModal {
+  repName: string;
+  days: LateDayDetail[];
+}
+
 interface RepStats {
   rep: SalesRep;
   present: number;
@@ -36,6 +47,7 @@ interface RepStats {
   absent: number;
   attendance: string;
   totalWorkingDays: number;
+  lateDays: number;
 }
 
 const getDaysInMonth = (year: number, month: number) => {
@@ -77,6 +89,7 @@ const SalesRepWorkingDaysPage: React.FC = () => {
   const [pendingStatus, setPendingStatus] = useState(selectedStatus);
   const [pendingStartDate, setPendingStartDate] = useState(startDate);
   const [pendingEndDate, setPendingEndDate] = useState(endDate);
+  const [lateDaysModal, setLateDaysModal] = useState<LateDaysModal | null>(null);
 
   // Data fetching
   useEffect(() => {
@@ -231,6 +244,27 @@ const SalesRepWorkingDaysPage: React.FC = () => {
     const daysAbsent = numWorkingDays - presentDays.size - leaveDays;
     const denominator = numWorkingDays - leaveDays;
     const attendance = denominator > 0 ? ((presentDays.size / denominator) * 100).toFixed(1) : 'N/A';
+
+    // Late days: days where the first (earliest) login was strictly after 7:00 AM local time
+    const LATE_CHECKIN_MINUTES = 7 * 60; // 7:00 AM in total minutes
+    let lateDays = 0;
+    presentDays.forEach(dayStr => {
+      const dayLogins = loginHistory.filter(lh =>
+        lh.userId === rep.id &&
+        lh.sessionStart &&
+        lh.sessionStart.slice(0, 10) === dayStr
+      );
+      if (dayLogins.length > 0) {
+        const earliest = dayLogins.reduce((min, lh) =>
+          lh.sessionStart < min.sessionStart ? lh : min
+        );
+        const loginDate = new Date(earliest.sessionStart);
+        const loginMinutes = loginDate.getHours() * 60 + loginDate.getMinutes();
+        if (loginMinutes > LATE_CHECKIN_MINUTES) {
+          lateDays++;
+        }
+      }
+    });
       
     return {
       rep,
@@ -238,7 +272,8 @@ const SalesRepWorkingDaysPage: React.FC = () => {
       leave: leaveDays,
       absent: daysAbsent < 0 ? 0 : daysAbsent,
       attendance,
-        totalWorkingDays: numWorkingDays
+      totalWorkingDays: numWorkingDays,
+      lateDays
     };
   });
   }, [filteredSalesReps, loginHistory, leaves, numWorkingDays, rangeStart, rangeEnd]);
@@ -275,12 +310,14 @@ const SalesRepWorkingDaysPage: React.FC = () => {
   }, [filteredRepStats]);
 
   const exportToCSV = () => {
-    const dateRangeTitle = `Date Range: ${startDate} to ${endDate}`;
+    const countryLabel = selectedCountry || 'All Countries';
+    const statusLabel = selectedStatus === '1' ? 'Active' : selectedStatus === '0' ? 'Inactive' : 'All Statuses';
     const headers = [
       'Sales Rep',
       'Days Present',
       'Days Absent',
       'Leave Days',
+      'Late Days (after 7am)',
       '% Attendance'
     ];
     const rows = filteredRepStats.map(stat => [
@@ -288,10 +325,18 @@ const SalesRepWorkingDaysPage: React.FC = () => {
       stat.present,
       stat.absent,
       stat.leave,
+      stat.lateDays,
       stat.attendance === 'N/A' ? 'N/A' : `${stat.attendance}%`
     ]);
     const csvContent = [
-      [dateRangeTitle],
+      ['Sales Rep Working Days Report'],
+      [`Date Range: ${startDate} to ${endDate}`],
+      [`Country: ${countryLabel}`],
+      [`Status: ${statusLabel}`],
+      [`Total Working Days: ${numWorkingDays}`],
+      [`Total Sales Reps: ${filteredRepStats.length}`],
+      [`Generated: ${new Date().toLocaleString()}`],
+      [],
       headers,
       ...rows
     ]
@@ -331,6 +376,48 @@ const SalesRepWorkingDaysPage: React.FC = () => {
       const d = new Date(year, month, daysInMonth);
       return d.toISOString().slice(0, 10);
     });
+  };
+
+  // Build late day details for a given rep
+  const buildLateDayDetails = (repId: number): LateDayDetail[] => {
+    const LATE_CHECKIN_MINUTES = 7 * 60;
+    const presentDays = new Set(
+      loginHistory
+        .filter(lh => lh.userId === repId &&
+          lh.sessionStart &&
+          new Date(lh.sessionStart) >= rangeStart && new Date(lh.sessionStart) <= rangeEnd &&
+          new Date(lh.sessionStart).getDay() !== 0)
+        .map(lh => lh.sessionStart.slice(0, 10))
+    );
+
+    const details: LateDayDetail[] = [];
+    presentDays.forEach(dayStr => {
+      const dayLogins = loginHistory.filter(lh =>
+        lh.userId === repId &&
+        lh.sessionStart &&
+        lh.sessionStart.slice(0, 10) === dayStr
+      );
+      if (dayLogins.length > 0) {
+        const earliest = dayLogins.reduce((min, lh) =>
+          lh.sessionStart < min.sessionStart ? lh : min
+        );
+        const loginDate = new Date(earliest.sessionStart);
+        const loginMinutes = loginDate.getHours() * 60 + loginDate.getMinutes();
+        if (loginMinutes > LATE_CHECKIN_MINUTES) {
+          details.push({
+            date: dayStr,
+            firstLoginTime: loginDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            minutesLate: loginMinutes - LATE_CHECKIN_MINUTES,
+          });
+        }
+      }
+    });
+
+    return details.sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const openLateDaysModal = (repId: number, repName: string) => {
+    setLateDaysModal({ repName, days: buildLateDayDetails(repId) });
   };
 
   // Helper function to format date
@@ -535,6 +622,10 @@ const SalesRepWorkingDaysPage: React.FC = () => {
                        <span className="text-xs text-gray-600">Absent</span>
                      </div>
                      <div className="flex items-center space-x-1">
+                       <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                       <span className="text-xs text-gray-600">Late</span>
+                     </div>
+                     <div className="flex items-center space-x-1">
                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                        <span className="text-xs text-gray-600">Active</span>
                      </div>
@@ -569,6 +660,9 @@ const SalesRepWorkingDaysPage: React.FC = () => {
                            </th>
                            <th className="px-3 py-2 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                              Leave Days
+                           </th>
+                           <th className="px-3 py-2 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                             Late Days
                            </th>
                            <th className="px-3 py-2 text-center text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                              Attendance %
@@ -626,6 +720,18 @@ const SalesRepWorkingDaysPage: React.FC = () => {
                                 <div className="text-[10px] text-gray-500">days</div>
                               </td>
                               <td className="px-3 py-2 whitespace-nowrap text-center">
+                                <button
+                                  onClick={() => stat.lateDays > 0 && openLateDaysModal(stat.rep.id, stat.rep.name)}
+                                  className={`group flex flex-col items-center w-full ${stat.lateDays > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+                                  title={stat.lateDays > 0 ? `Click to see late days for ${stat.rep.name}` : undefined}
+                                >
+                                  <div className={`text-xs font-semibold ${stat.lateDays > 0 ? 'text-amber-600 group-hover:underline' : 'text-gray-400'}`}>
+                                    {stat.lateDays}
+                                  </div>
+                                  <div className="text-[10px] text-gray-500">after 7am</div>
+                                </button>
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-center">
                                 <div className={`text-xs font-semibold ${attendanceColor}`}>
                                   {stat.attendance === 'N/A' ? 'N/A' : `${stat.attendance}%`}
                                 </div>
@@ -652,6 +758,123 @@ const SalesRepWorkingDaysPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Enhanced Filter Modal */}
+      {/* Late Days Detail Modal */}
+      {lateDaysModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col" style={{ maxHeight: '85vh' }}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500 flex-shrink-0">
+              <div className="flex items-center space-x-3">
+                <AlarmClock className="h-5 w-5 text-white" />
+                <div>
+                  <h2 className="text-base font-bold text-white">Late Check-ins</h2>
+                  <p className="text-xs text-amber-100">{lateDaysModal.repName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setLateDaysModal(null)}
+                className="text-white hover:text-amber-200 transition-colors duration-150"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Sub-header */}
+            <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center justify-between flex-shrink-0">
+              <p className="text-xs text-amber-700">
+                Check-in threshold: <span className="font-semibold">7:00 AM</span> &nbsp;·&nbsp;
+                <span className="font-semibold">{lateDaysModal.days.length}</span> late {lateDaysModal.days.length === 1 ? 'day' : 'days'} in selected range
+              </p>
+              <p className="text-[11px] text-amber-600 italic">
+                {startDate} – {endDate}
+              </p>
+            </div>
+
+            {/* Days List */}
+            <div className="overflow-y-auto flex-1">
+              {lateDaysModal.days.length === 0 ? (
+                <div className="text-center py-16 text-xs text-gray-500">No late days found in this range.</div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-100">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-8">#</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-5 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">First Login</th>
+                      <th className="px-5 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Time Late</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {lateDaysModal.days.map((day, idx) => {
+                      const dateObj = new Date(day.date + 'T00:00:00');
+                      const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                      const lateHrs = Math.floor(day.minutesLate / 60);
+                      const lateMins = day.minutesLate % 60;
+                      const lateLabel = lateHrs > 0 ? `${lateHrs}h ${lateMins}m` : `${lateMins}m`;
+                      const severity = day.minutesLate > 120 ? 'bg-red-100 text-red-700' :
+                        day.minutesLate > 60 ? 'bg-orange-100 text-orange-700' :
+                        'bg-amber-100 text-amber-700';
+                      return (
+                        <tr key={day.date} className="hover:bg-amber-50 transition-colors duration-100">
+                          <td className="px-5 py-3 text-xs text-gray-400">{idx + 1}</td>
+                          <td className="px-5 py-3 text-xs text-gray-800 font-medium whitespace-nowrap">{dayLabel}</td>
+                          <td className="px-5 py-3 text-center text-xs font-semibold text-amber-600 whitespace-nowrap">{day.firstLoginTime}</td>
+                          <td className="px-5 py-3 text-center whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${severity}`}>
+                              +{lateLabel}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
+              <button
+                onClick={() => {
+                  const headers = ['#', 'Date', 'Day', 'First Login Time', 'Minutes Late', 'Time Late'];
+                  const rows = lateDaysModal.days.map((day, idx) => {
+                    const dateObj = new Date(day.date + 'T00:00:00');
+                    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+                    const lateHrs = Math.floor(day.minutesLate / 60);
+                    const lateMins = day.minutesLate % 60;
+                    const lateLabel = lateHrs > 0 ? `${lateHrs}h ${lateMins}m` : `${lateMins}m`;
+                    return [idx + 1, day.date, dayName, day.firstLoginTime, day.minutesLate, lateLabel];
+                  });
+                  const csvContent = [
+                    [`Late Check-ins Report – ${lateDaysModal.repName}`],
+                    [`Date Range: ${startDate} to ${endDate}`],
+                    [`Check-in Threshold: 7:00 AM`],
+                    [],
+                    headers,
+                    ...rows,
+                  ]
+                    .map(row => row.map(f => '"' + String(f).replace(/"/g, '""') + '"').join(','))
+                    .join('\n');
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  saveAs(blob, `late_checkins_${lateDaysModal.repName.replace(/\s+/g, '_')}.csv`);
+                }}
+                className="inline-flex items-center px-3 py-1.5 border border-amber-300 rounded-lg text-xs font-medium text-amber-700 bg-white hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 transition-colors duration-200"
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                Export CSV
+              </button>
+              <button
+                onClick={() => setLateDaysModal(null)}
+                className="px-4 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 transition-all duration-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Enhanced Filter Modal */}
       {filterModalOpen && (

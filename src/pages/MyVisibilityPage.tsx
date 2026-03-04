@@ -46,9 +46,11 @@ const MyVisibilityPage: React.FC = () => {
   const [selectedOutlet, setSelectedOutlet] = useState<string>('');
   const [selectedCountry, setSelectedCountry] = useState<string>('');
   const [selectedSalesRep, setSelectedSalesRep] = useState<string>('');
+  const [selectedPhotoType, setSelectedPhotoType] = useState<string>('');
   const [outlets, setOutlets] = useState<string[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [salesReps, setSalesReps] = useState<string[]>([]);
+  const [photoTypes, setPhotoTypes] = useState<string[]>([]);
   const [defaultCountrySet, setDefaultCountrySet] = useState<boolean>(false);
   const [pagination, setPagination] = useState<PaginationInfo>({
     currentPage: 1,
@@ -76,6 +78,7 @@ const MyVisibilityPage: React.FC = () => {
         setOutlets(options.outlets);
         setCountries(options.countries);
         setSalesReps(options.salesReps);
+        setPhotoTypes(options.photoTypes || []);
       } catch (err) {
         console.error('Error loading filter options:', err);
       }
@@ -144,6 +147,7 @@ const MyVisibilityPage: React.FC = () => {
         outlet: selectedOutlet,
         country: selectedCountry,
         salesRep: selectedSalesRep,
+        photoType: selectedPhotoType,
         startDate,
         endDate
       });
@@ -153,7 +157,7 @@ const MyVisibilityPage: React.FC = () => {
       setError(err.message || 'Failed to fetch my visibility reports');
     }
     setLoading(false);
-  }, [pageSize, debouncedSearch, selectedOutlet, selectedCountry, selectedSalesRep, startDate, endDate]);
+  }, [pageSize, debouncedSearch, selectedOutlet, selectedCountry, selectedSalesRep, selectedPhotoType, startDate, endDate]);
 
   // Fetch reports when filters change
   useEffect(() => {
@@ -187,10 +191,11 @@ const MyVisibilityPage: React.FC = () => {
   }, []);
 
   const exportToCSV = useCallback(() => {
-    const headers = ['Outlet', 'Company', 'Sales Rep', 'Comment', 'Created At'];
+    const headers = ['Outlet', 'Company', 'Photo Type', 'Sales Rep', 'Comment', 'Created At'];
     const csvData = reports.map(report => [
       report.outletName || '',
       report.companyName || '',
+      report.photoType || '',
       report.salesRep || '',
       report.comment,
       // Use raw DB value for CSV to avoid any conversion
@@ -215,6 +220,7 @@ const MyVisibilityPage: React.FC = () => {
     setSelectedOutlet('');
     setSelectedCountry('');
     setSelectedSalesRep('');
+    setSelectedPhotoType('');
     setStartDate(today);
     setEndDate(today);
   }, [today]);
@@ -230,7 +236,7 @@ const MyVisibilityPage: React.FC = () => {
     fetchReports(1);
   }, [fetchReports]);
 
-  const hasActiveFilters = searchQuery || selectedOutlet || selectedCountry || selectedSalesRep || startDate !== today || endDate !== today;
+  const hasActiveFilters = searchQuery || selectedOutlet || selectedCountry || selectedSalesRep || selectedPhotoType || startDate !== today || endDate !== today;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -307,6 +313,18 @@ const MyVisibilityPage: React.FC = () => {
                   <option value="">All Sales Reps</option>
                   {salesReps.map(rep => (
                     <option key={rep} value={rep}>{rep}</option>
+                  ))}
+                </select>
+
+                {/* Photo Type Filter */}
+                <select
+                  value={selectedPhotoType}
+                  onChange={(e) => setSelectedPhotoType(e.target.value)}
+                  className="block w-full sm:w-40 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-[10px]"
+                >
+                  <option value="">All Photo Types</option>
+                  {photoTypes.map(photoType => (
+                    <option key={photoType} value={photoType}>{photoType}</option>
                   ))}
                 </select>
               </div>
@@ -396,6 +414,11 @@ const MyVisibilityPage: React.FC = () => {
                     Sales Rep: {selectedSalesRep}
                   </span>
                 )}
+                {selectedPhotoType && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-pink-100 text-pink-800">
+                    Photo Type: {selectedPhotoType}
+                  </span>
+                )}
                 {startDate && endDate && startDate === endDate && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-orange-100 text-orange-800">
                     Date: {startDate}
@@ -463,6 +486,9 @@ const MyVisibilityPage: React.FC = () => {
                       Image
                     </th>
                     <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      Photo Type
+                    </th>
+                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                       Outlet
                     </th>
                     <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
@@ -503,6 +529,13 @@ const MyVisibilityPage: React.FC = () => {
                               <Image className="h-4 w-4 text-gray-400" />
                             </div>
                           )}
+                        </div>
+                      </td>
+
+                      {/* Photo Type Column */}
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="text-[10px] text-gray-900">
+                          {report.photoType || '-'}
                         </div>
                       </td>
 

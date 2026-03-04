@@ -12,6 +12,7 @@ export interface MyVisibilityReport {
   createdAt: string;
   clientId: number;
   userId: number;
+  photoType?: string;
 }
 
 export interface PaginationInfo {
@@ -33,6 +34,7 @@ export interface FilterOptions {
   outlets: string[];
   countries: string[];
   salesReps: string[];
+  photoTypes: string[];
 }
 
 export interface GetReportsParams {
@@ -42,6 +44,7 @@ export interface GetReportsParams {
   outlet?: string;
   country?: string;
   salesRep?: string;
+  photoType?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -59,6 +62,7 @@ export const myVisibilityReportService = {
       if (params.outlet) queryParams.append('outlet', params.outlet);
       if (params.country) queryParams.append('country', params.country);
       if (params.salesRep) queryParams.append('salesRep', params.salesRep);
+      if (params.photoType) queryParams.append('photoType', params.photoType);
       if (params.startDate) queryParams.append('startDate', params.startDate);
       if (params.endDate) queryParams.append('endDate', params.endDate);
 

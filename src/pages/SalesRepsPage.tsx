@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { salesService, SalesRep, CreateSalesRepData, Country, Region, Route as SalesRoute, SalesRepTargets } from '../services/salesService';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import SalesRepTargetsModal from '../components/SalesRepTargetsModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -528,6 +528,7 @@ const AssignManagersModal: React.FC<{
 
 const SalesRepsPage: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -561,9 +562,13 @@ const SalesRepsPage: React.FC = () => {
   const [repsPerPage, setRepsPerPage] = useState(10);
   const recordsPerPageOptions = [10, 20, 50, 100];
 
-  // 1. Add status filter state
-  const [selectedStatus, setSelectedStatus] = useState<'1' | '0' | ''>('1'); // '1' = active, '0' = inactive, '' = all
-  const [pendingStatus, setPendingStatus] = useState<'1' | '0' | ''>('1');
+  // 1. Add status filter state - check location state for filterStatus
+  const [selectedStatus, setSelectedStatus] = useState<'1' | '0' | ''>(
+    (location.state as any)?.filterStatus || '1'
+  ); // '1' = active, '0' = inactive, '' = all
+  const [pendingStatus, setPendingStatus] = useState<'1' | '0' | ''>(
+    (location.state as any)?.filterStatus || '1'
+  );
   
   // Role filter state
   const [selectedRole, setSelectedRole] = useState<string>('');

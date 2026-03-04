@@ -81,6 +81,11 @@ const SalesRepAttendancePage: React.FC = () => {
         console.log('Total sales reps count:', repsRes?.length || 0);
         console.log('Active sales reps count:', repsRes?.filter(rep => rep.status === 1).length || 0);
         setSalesReps(repsRes || []);
+        // Auto-select the first active rep so data loads immediately
+        const firstActive = (repsRes || []).find(rep => rep.status === 1);
+        if (firstActive) {
+          setSelectedRep(String(firstActive.id));
+        }
         setLoading(false);
       })
       .catch((error) => {
@@ -133,6 +138,7 @@ const SalesRepAttendancePage: React.FC = () => {
 
   // Get all days in the selected month
   const [year, monthNum] = month.split('-').map(Number);
+  // monthNum is 1-indexed (1-12), so to get last day of current month, use monthNum (next month in 0-indexed)
   const daysInMonth = new Date(year, monthNum, 0).getDate();
   const days: string[] = [];
   const today = new Date();
@@ -142,7 +148,9 @@ const SalesRepAttendancePage: React.FC = () => {
     const date = new Date(year, monthNum - 1, d);
     // Only include dates that are not in the future for statistics calculation
     if (date <= today) {
-      days.push(date.toISOString().slice(0, 10));
+      // Use local date formatting to avoid timezone issues
+      const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      days.push(dateStr);
     }
   }
 
@@ -614,44 +622,6 @@ const SalesRepAttendancePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="bg-white rounded-lg shadow-md border border-gray-100 p-3">
-                    <div className="flex items-center">
-                      <div className="bg-blue-100 p-2 rounded-lg">
-                        <BarChart3 className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-sm font-medium text-gray-900">Analytics</h4>
-                        <p className="text-[10px] text-gray-500">View detailed performance metrics</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-lg shadow-md border border-gray-100 p-3">
-                    <div className="flex items-center">
-                      <div className="bg-green-100 p-2 rounded-lg">
-                        <Clock className="h-4 w-4 text-green-600" />
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-sm font-medium text-gray-900">Working Hours</h4>
-                        <p className="text-[10px] text-gray-500">Track time spent on field</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-lg shadow-md border border-gray-100 p-3">
-                    <div className="flex items-center">
-                      <div className="bg-purple-100 p-2 rounded-lg">
-                        <Zap className="h-4 w-4 text-purple-600" />
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-sm font-medium text-gray-900">Performance</h4>
-                        <p className="text-[10px] text-gray-500">Monitor attendance trends</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
           </>

@@ -12,7 +12,8 @@ import {
   DollarSign,
   Target,
   MapPin,
-  BarChart3
+  BarChart3,
+  Layout
 } from 'lucide-react';
 
 interface VisitLink {
@@ -121,6 +122,22 @@ const VisitsIndexPage: React.FC = () => {
         'Outlet target tracking',
         'Outlet and rep filters',
         'Date range selection',
+        'CSV export support'
+      ]
+    },
+    {
+      id: 'planogram-compliance-report',
+      title: 'Planogram Compliance Report',
+      description: 'Compare planogram compliance targets with actual quantities from ProductReport to track execution against targets.',
+      path: '/planogram-compliance-report',
+      icon: <Layout className="w-4 h-4" />,
+      headerColor: 'bg-green-600',
+      features: [
+        'Target vs actual quantity comparison',
+        'Product-level compliance tracking',
+        'Outlet account filtering',
+        'Date range selection',
+        'Report count and last report date',
         'CSV export support'
       ]
     },

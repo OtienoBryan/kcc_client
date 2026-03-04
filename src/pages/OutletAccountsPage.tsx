@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Pencil, Trash2, Plus, Search, Building2, X, AlertCircle, Target } from 'lucide-react';
+import { Pencil, Trash2, Plus, Search, Building2, X, AlertCircle, Target, Layout } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 
 interface OutletAccount {
   id: number;
   name: string;
+  planogram_compliance?: number;
 }
 
 const OutletAccountsPage: React.FC = () => {
@@ -28,11 +29,34 @@ const OutletAccountsPage: React.FC = () => {
   const [selectedBrandId, setSelectedBrandId] = useState<number | ''>('');
   const [targetPercentage, setTargetPercentage] = useState<string>('');
   const [savingTarget, setSavingTarget] = useState(false);
+  const [planogramModalOpen, setPlanogramModalOpen] = useState(false);
+  const [savingPlanogram, setSavingPlanogram] = useState(false);
+  const [products, setProducts] = useState<{ id: number; product_name: string }[]>([]);
+  const [planogramCompliances, setPlanogramCompliances] = useState<{ id: number; product_id: number; product_name: string; compliance_quantity: number }[]>([]);
+  const [loadingPlanogram, setLoadingPlanogram] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<number | ''>('');
+  const [complianceQuantity, setComplianceQuantity] = useState<string>('');
 
   useEffect(() => {
     fetchAccounts();
     fetchBrands();
+    fetchProducts();
   }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await axios.get('/api/financial/products', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (res.data.success) {
+        setProducts(res.data.data);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch products:', err);
+    }
+  };
 
   const fetchBrands = async () => {
     try {
@@ -73,6 +97,85 @@ const OutletAccountsPage: React.FC = () => {
     setSelectedBrandId('');
     setTargetPercentage('');
     fetchSosTargets(account.id);
+  };
+
+  const fetchPlanogramCompliance = async (outletAccountId: number) => {
+    setLoadingPlanogram(true);
+    try {
+      const res = await axios.get(`/api/planogram-compliance/outlet-account/${outletAccountId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (res.data.success) {
+        setPlanogramCompliances(res.data.data);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch planogram compliance:', err);
+      setPlanogramCompliances([]);
+    }
+    setLoadingPlanogram(false);
+  };
+
+  const openPlanogramModal = (account: OutletAccount) => {
+    setSelectedOutletAccount(account);
+    setPlanogramModalOpen(true);
+    setSelectedProductId('');
+    setComplianceQuantity('');
+    setError(null);
+    fetchPlanogramCompliance(account.id);
+  };
+
+  const handleSavePlanogramCompliance = async () => {
+    if (!selectedOutletAccount || !selectedProductId || !complianceQuantity) {
+      setError('Please select a product and enter a compliance quantity');
+      return;
+    }
+
+    const quantity = parseInt(complianceQuantity, 10);
+    if (isNaN(quantity) || quantity < 0) {
+      setError('Compliance quantity must be a positive number');
+      return;
+    }
+
+    setSavingPlanogram(true);
+    setError(null);
+    try {
+      const res = await axios.post('/api/planogram-compliance', {
+        outlet_account_id: selectedOutletAccount.id,
+        product_id: selectedProductId,
+        compliance_quantity: quantity
+      }, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (res.data.success) {
+        await fetchPlanogramCompliance(selectedOutletAccount.id);
+        setSelectedProductId('');
+        setComplianceQuantity('');
+      } else {
+        setError(res.data.error || 'Failed to save planogram compliance');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to save planogram compliance');
+    }
+    setSavingPlanogram(false);
+  };
+
+  const handleDeletePlanogramCompliance = async (id: number) => {
+    try {
+      const res = await axios.delete(`/api/planogram-compliance/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (res.data.success && selectedOutletAccount) {
+        await fetchPlanogramCompliance(selectedOutletAccount.id);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to delete planogram compliance');
+    }
   };
 
   const handleSaveSosTarget = async () => {
@@ -412,6 +515,13 @@ const OutletAccountsPage: React.FC = () => {
                                 <Target className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                onClick={() => openPlanogramModal(account)}
+                                className="p-0.5 text-green-600 hover:text-green-700 transition-colors"
+                                title="Set Planogram Compliance"
+                              >
+                                <Layout className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => startEditing(account)}
                                 className="p-0.5 text-blue-600 hover:text-blue-700 transition-colors"
                                 title="Edit"
@@ -734,6 +844,183 @@ const OutletAccountsPage: React.FC = () => {
                           setSosTargets([]);
                           setSelectedBrandId('');
                           setTargetPercentage('');
+                          setError(null);
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </Dialog.Panel>
+                </Transition.Child>
+              </div>
+            </div>
+          </Dialog>
+        </Transition>
+
+        {/* Planogram Compliance Modal */}
+        <Transition show={planogramModalOpen} as={React.Fragment}>
+          <Dialog as="div" className="relative z-50" onClose={() => setPlanogramModalOpen(false)}>
+            <Transition.Child
+              as={React.Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0"
+              enterTo="opacity-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
+            >
+              <div className="fixed inset-0 bg-black bg-opacity-25" />
+            </Transition.Child>
+
+            <div className="fixed inset-0 overflow-y-auto">
+              <div className="flex min-h-full items-center justify-center p-4">
+                <Transition.Child
+                  as={React.Fragment}
+                  enter="ease-out duration-300"
+                  enterFrom="opacity-0 scale-95"
+                  enterTo="opacity-100 scale-100"
+                  leave="ease-in duration-200"
+                  leaveFrom="opacity-100 scale-100"
+                  leaveTo="opacity-0 scale-95"
+                >
+                  <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-lg bg-white shadow-xl transition-all">
+                    <div className="p-4 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <Dialog.Title className="text-sm font-bold text-gray-900">
+                          Planogram Compliance - {selectedOutletAccount?.name}
+                        </Dialog.Title>
+                        <button
+                          onClick={() => {
+                            setPlanogramModalOpen(false);
+                            setSelectedOutletAccount(null);
+                            setPlanogramCompliances([]);
+                            setSelectedProductId('');
+                            setComplianceQuantity('');
+                            setError(null);
+                          }}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 space-y-4">
+                      {/* Error Message */}
+                      {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-red-800">{error}</p>
+                        </div>
+                      )}
+
+                      {/* Add New Compliance Form */}
+                      <div className="bg-gray-50 rounded-lg p-3 space-y-3">
+                        <h3 className="text-xs font-medium text-gray-700 mb-2">Add New Compliance</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Product <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={selectedProductId}
+                              onChange={(e) => setSelectedProductId(e.target.value ? Number(e.target.value) : '')}
+                              className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-green-500 focus:border-transparent"
+                            >
+                              <option value="">Select product</option>
+                              {products
+                                .filter(product => !planogramCompliances.some(pc => pc.product_id === product.id))
+                                .map(product => (
+                                  <option key={product.id} value={product.id}>{product.product_name}</option>
+                                ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Compliance Quantity <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={complianceQuantity}
+                              onChange={(e) => setComplianceQuantity(e.target.value)}
+                              className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-green-500 focus:border-transparent"
+                              placeholder="Enter quantity"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleSavePlanogramCompliance}
+                          disabled={savingPlanogram || !selectedProductId || !complianceQuantity}
+                          className="w-full px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingPlanogram ? 'Saving...' : 'Add Compliance'}
+                        </button>
+                      </div>
+
+                      {/* Existing Compliance List */}
+                      <div>
+                        <h3 className="text-xs font-medium text-gray-700 mb-2">Current Compliance</h3>
+                        {loadingPlanogram ? (
+                          <div className="text-center py-4">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
+                            <p className="text-xs text-gray-600 mt-2">Loading compliance...</p>
+                          </div>
+                        ) : planogramCompliances.length === 0 ? (
+                          <div className="text-center py-4 bg-gray-50 rounded-lg">
+                            <Layout className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-xs text-gray-600">No planogram compliance set for this outlet account</p>
+                          </div>
+                        ) : (
+                          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Product</th>
+                                    <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase">Target Quantity</th>
+                                    <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {planogramCompliances.map(compliance => (
+                                    <tr key={compliance.id} className="hover:bg-gray-50">
+                                      <td className="px-3 py-2">
+                                        <span className="text-xs font-medium text-gray-900">{compliance.product_name}</span>
+                                      </td>
+                                      <td className="px-3 py-2 text-right">
+                                        <span className="text-xs font-semibold text-green-600">{compliance.compliance_quantity}</span>
+                                      </td>
+                                      <td className="px-3 py-2 text-right">
+                                        <button
+                                          onClick={() => handleDeletePlanogramCompliance(compliance.id)}
+                                          className="p-0.5 text-red-600 hover:text-red-700 transition-colors"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-4 border-t border-gray-200 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlanogramModalOpen(false);
+                          setSelectedOutletAccount(null);
+                          setPlanogramCompliances([]);
+                          setSelectedProductId('');
+                          setComplianceQuantity('');
                           setError(null);
                         }}
                         className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
