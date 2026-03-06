@@ -11,6 +11,7 @@ export interface CompetitorActivityReport {
   zuri_product: string;
   date: string;
   reportId: number | null;
+  competitor_company?: string;
   outletName?: string;
   merchandiserName?: string;
 }

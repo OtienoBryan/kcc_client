@@ -112,6 +112,7 @@ import ReportsIndexPage from './pages/ReportsIndexPage';
 import ShortExpiryReportPage from './pages/ShortExpiryReportPage';
 import CompetitorActivityReportPage from './pages/CompetitorActivityReportPage';
 import PriceComplianceReportPage from './pages/PriceComplianceReportPage';
+import OutletCoveragePage from './pages/OutletCoveragePage';
 import SosReportPage from './pages/SosReportPage';
 import PlanogramComplianceReportPage from './pages/PlanogramComplianceReportPage';
 import PlanogramComplianceOutletSummaryPage from './pages/PlanogramComplianceOutletSummaryPage';
@@ -729,6 +730,7 @@ const App = () => {
             <Route path="/short-expiry-report" element={<ShortExpiryReportPage />} />
             <Route path="/competitor-activity-report" element={<CompetitorActivityReportPage />} />
             <Route path="/price-compliance-report" element={<PriceComplianceReportPage />} />
+            <Route path="/outlet-coverage" element={<OutletCoveragePage />} />
             <Route path="/sos-report" element={<SosReportPage />} />
             <Route path="/planogram-compliance-report" element={<PlanogramComplianceReportPage />} />
             <Route path="/planogram-compliance-outlet-summary" element={<PlanogramComplianceOutletSummaryPage />} />

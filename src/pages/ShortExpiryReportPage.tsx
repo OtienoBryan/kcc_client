@@ -400,7 +400,7 @@ const ShortExpiryReportPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('/reports')}
+            onClick={() => navigate('/visits')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors text-xs"
           >
             <ArrowLeft className="w-3 h-3" />
@@ -482,6 +482,15 @@ const ShortExpiryReportPage: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Region
+                      </th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Outlet
+                      </th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Sales Rep
+                      </th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Product Name
                       </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
@@ -497,12 +506,6 @@ const ShortExpiryReportPage: React.FC = () => {
                         Days to Expiry
                       </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                        Outlet
-                      </th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                        Sales Rep
-                      </th>
-                      <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Created At
                       </th>
                     </tr>
@@ -510,6 +513,27 @@ const ShortExpiryReportPage: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {reports.map((report) => (
                       <tr key={report.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className="text-[10px] text-gray-900">
+                            {report.regionName || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Building2 className="h-3 w-3 text-gray-400 mr-1.5" />
+                            <span className="text-[10px] text-gray-900">
+                              {report.outletName || 'N/A'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <User className="h-3 w-3 text-gray-400 mr-1.5" />
+                            <span className="text-[10px] text-gray-900">
+                              {report.salesRepName || 'N/A'}
+                            </span>
+                          </div>
+                        </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <div className="flex items-center">
                             <Package className="h-3 w-3 text-gray-400 mr-1.5" />
@@ -542,22 +566,6 @@ const ShortExpiryReportPage: React.FC = () => {
                               </span>
                             );
                           })()}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <Building2 className="h-3 w-3 text-gray-400 mr-1.5" />
-                            <span className="text-[10px] text-gray-900">
-                              {report.outletName || 'N/A'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <User className="h-3 w-3 text-gray-400 mr-1.5" />
-                            <span className="text-[10px] text-gray-900">
-                              {report.salesRepName || 'N/A'}
-                            </span>
-                          </div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <span className="text-[10px] text-gray-500">

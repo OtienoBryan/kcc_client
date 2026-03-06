@@ -184,6 +184,21 @@ const VisitsIndexPage: React.FC = () => {
         'Outlet account filter',
         'Full-width detailed view'
       ]
+    },
+    {
+      id: 'outlet-coverage',
+      title: 'Outlet Coverage',
+      description: 'View weekly outlet coverage by sales representative. Track expected vs actual coverage for weeks 1-5.',
+      path: '/outlet-coverage',
+      icon: <TrendingUp className="w-4 h-4" />,
+      headerColor: 'bg-blue-600',
+      features: [
+        'Weekly coverage tracking',
+        'Expected vs actual comparison',
+        'Sales rep performance',
+        'Month and year filters',
+        'CSV export support'
+      ]
     }
   ];
 

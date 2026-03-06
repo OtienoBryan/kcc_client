@@ -10,6 +10,7 @@ export interface SalesRep {
   route_name_update?: string;
   photoUrl?: string;
   role?: string; // 'sales rep' or 'team leader'
+  expected_weekly_coverage?: number;
   created_at?: string;
   updated_at?: string;
   status?: number; // 1 for active, 0 for inactive
@@ -24,6 +25,7 @@ export interface CreateSalesRepData {
   route_name_update?: string;
   photoUrl?: string;
   role?: string; // 'sales rep' or 'team leader'
+  expected_weekly_coverage?: number;
 }
 
 export interface UpdateSalesRepData extends CreateSalesRepData {
@@ -172,7 +174,19 @@ export const salesService = {
 
   // Create a new sales rep
   createSalesRep: async (data: CreateSalesRepData): Promise<SalesRep> => {
-    const response = await axios.post(`${API_BASE_URL}/sales-reps`, data);
+    // Map frontend fields to backend expected fields
+    const payload = {
+      name: data.name,
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+      country: data.country,
+      region: data.region,
+      route: data.route_name_update, // backend expects 'route'
+      photo: data.photoUrl, // backend expects 'photo'
+      role: data.role,
+      expected_weekly_coverage: data.expected_weekly_coverage
+    };
+    const response = await axios.post(`${API_BASE_URL}/sales-reps`, payload);
     return response.data;
   },
 
@@ -187,7 +201,8 @@ export const salesService = {
       region: data.region,
       route_name_update: data.route_name_update, // backend expects 'route_name_update'
       photoUrl: data.photoUrl, // backend expects 'photoUrl'
-      role: data.role // backend expects 'role'
+      role: data.role, // backend expects 'role'
+      expected_weekly_coverage: data.expected_weekly_coverage
     };
     const response = await axios.put(`${API_BASE_URL}/sales-reps/${data.id}`, payload);
     return response.data;

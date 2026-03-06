@@ -30,6 +30,7 @@ const SalesRepModal: React.FC<SalesRepModalProps> = ({
     route_name_update: '',
     photoUrl: '',
     role: 'sales rep',
+    expected_weekly_coverage: undefined,
     status: 1,
   });
   const [countries, setCountries] = useState<Country[]>([]);
@@ -69,6 +70,7 @@ const SalesRepModal: React.FC<SalesRepModalProps> = ({
         route_name_update: salesRep.route_name_update || '',
         photoUrl: salesRep.photoUrl || '',
         role: salesRep.role || 'sales rep',
+        expected_weekly_coverage: salesRep.expected_weekly_coverage,
         status: salesRep.status ?? 1,
       });
     } else {
@@ -81,6 +83,7 @@ const SalesRepModal: React.FC<SalesRepModalProps> = ({
         route_name_update: '',
         photoUrl: '',
         role: 'sales rep',
+        expected_weekly_coverage: undefined,
         status: 1,
       });
     }
@@ -228,6 +231,18 @@ const SalesRepModal: React.FC<SalesRepModalProps> = ({
               <option value="sales rep">Sales Rep</option>
               <option value="team leader">Team Leader</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-gray-700 mb-1.5">Expected Weekly Coverage</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={formData.expected_weekly_coverage ?? ''}
+              onChange={(e) => setFormData({ ...formData, expected_weekly_coverage: e.target.value ? Number(e.target.value) : undefined })}
+              className="block w-full border border-gray-300 rounded-lg px-2 py-1 text-[10px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter number"
+            />
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-700 mb-1.5">Status</label>
@@ -1051,6 +1066,9 @@ const SalesRepsPage: React.FC = () => {
                       Role
                     </th>
                     <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      Expected Weekly Coverage
+                    </th>
+                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                       Team Leader
                     </th>
                     <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
@@ -1112,6 +1130,13 @@ const SalesRepsPage: React.FC = () => {
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="text-[10px] text-gray-900">
+                          {rep.expected_weekly_coverage !== undefined && rep.expected_weekly_coverage !== null
+                            ? rep.expected_weekly_coverage
+                            : <span className="text-gray-400">Not set</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="text-[10px] text-gray-900">
                           {salesRepTeamLeaders[rep.id] && salesRepTeamLeaders[rep.id].length > 0 ? (
                             <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-100 text-blue-800 border border-blue-200">
                               {salesRepTeamLeaders[rep.id].map(tl => tl.name).join(', ')}
@@ -1161,7 +1186,7 @@ const SalesRepsPage: React.FC = () => {
                   ))}
                   {paginatedSalesReps.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-6 py-8 text-center">
+                      <td colSpan={11} className="px-6 py-8 text-center">
                         <div className="text-[10px] text-gray-500">No staff found.</div>
                       </td>
                     </tr>

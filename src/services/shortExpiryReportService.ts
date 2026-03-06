@@ -12,6 +12,7 @@ export interface ShortExpiryReport {
   appoint_id: number;
   outlet_id: number;
   outletName?: string;
+  regionName?: string;
   salesRepName?: string;
 }
 

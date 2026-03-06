@@ -446,6 +446,9 @@ const CompetitorActivityReportPage: React.FC = () => {
                         Merchandiser
                       </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Competitor Name
+                      </th>
+                      <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Competing Product
                       </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
@@ -475,6 +478,14 @@ const CompetitorActivityReportPage: React.FC = () => {
                             <User className="h-3 w-3 text-gray-400 mr-1.5" />
                             <span className="text-[10px] text-gray-900">
                               {report.merchandiserName || 'N/A'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Building2 className="h-3 w-3 text-gray-400 mr-1.5" />
+                            <span className="text-[10px] text-gray-900">
+                              {report.competitor_company || 'N/A'}
                             </span>
                           </div>
                         </td>

@@ -2,20 +2,15 @@ import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  Legend, LineChart, Line, PieChart, Pie, Cell
+  LineChart, Line, Cell
 } from 'recharts';
 import { API_CONFIG } from '../config/api';
 import {
-  TrendingUpIcon, UsersIcon, ShoppingCartIcon, DollarSignIcon,
+  TrendingUpIcon, UsersIcon, ShoppingCartIcon,
   BarChart3Icon, PieChartIcon, CalendarIcon, MapPinIcon, FileTextIcon,
   X, RefreshCwIcon, ChevronRightIcon, ClipboardListIcon, ActivityIcon,
   CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon,
 } from 'lucide-react';
-
-const COLORS = [
-  '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#a21caf',
-  '#0ea5e9', '#f43f5e', '#16a34a', '#facc15', '#8b5cf6', '#f87171'
-];
 
 /* ──────────────────────────── StatCard ──────────────────────────── */
 interface StatCardProps {
@@ -101,15 +96,15 @@ const SalesDashboardPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const [stats, setStats] = useState({
-    totalSales: 0, totalOrders: 0, activeReps: 0,
+    totalSales: 0, outletsVisitedThisMonth: 0, totalOrders: 0, activeReps: 0,
     checkedInReps: 0, totalActiveReps: 0, avgPerformance: 0,
   });
   const [planogramComplianceData, setPlanogramComplianceData] = useState<{ month: string; compliance: number }[]>([]);
   const [topReps, setTopReps] = useState<{ name: string; overall: number }[]>([]);
-  const [managers, setManagers] = useState<any[]>([]);
   const [pendingLeavesCount, setPendingLeavesCount] = useState(0);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [outletsVisited, setOutletsVisited] = useState<{ month: string; outlets: number }[]>([]);
+  const [ordersSummary, setOrdersSummary] = useState<{ month: string; quantity: number }[]>([]);
 
   // Checked-in reps modal
   const [activeRepsModalOpen, setActiveRepsModalOpen] = useState(false);
@@ -146,7 +141,6 @@ const SalesDashboardPage: React.FC = () => {
         setStats(d.stats);
         setPlanogramComplianceData(d.planogramComplianceData || []);
         setTopReps(d.topReps || []);
-        setManagers(d.managers || []);
         setPendingLeavesCount(d.pendingLeavesCount || 0);
         setNewOrdersCount(d.newOrdersCount || 0);
       }
@@ -160,9 +154,15 @@ const SalesDashboardPage: React.FC = () => {
   /* ── charts data ── */
   const fetchChartsData = useCallback(async () => {
     try {
-      const outletsResult = await fetchData('/dashboard/outlets-visited');
+      const [outletsResult, ordersSummaryResult] = await Promise.all([
+        fetchData('/dashboard/outlets-visited'),
+        fetchData('/dashboard/orders-summary')
+      ]);
       if (outletsResult.success && outletsResult.data) {
         setOutletsVisited(outletsResult.data || []);
+      }
+      if (ordersSummaryResult.success && ordersSummaryResult.data) {
+        setOrdersSummary(ordersSummaryResult.data || []);
       }
     } catch {
       // charts are non-critical
@@ -247,10 +247,6 @@ const SalesDashboardPage: React.FC = () => {
     },
   ], [pendingLeavesCount, newOrdersCount]);
 
-  const managersWithPerformance = useMemo(() =>
-    managers.map(m => ({ name: m.name, value: Math.random() * 100 })),
-    [managers]
-  );
 
   const checkedInPct = stats.totalActiveReps > 0
     ? ((stats.checkedInReps || 0) / stats.totalActiveReps * 100).toFixed(1)
@@ -316,11 +312,11 @@ const SalesDashboardPage: React.FC = () => {
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
-            title="Total Sales (KES)"
-            value={Number(stats.totalSales).toLocaleString()}
-            icon={<DollarSignIcon className="h-4 w-4 text-white" />}
+            title="Outlets Visited"
+            value={Number(stats.outletsVisitedThisMonth || 0).toLocaleString()}
+            icon={<MapPinIcon className="h-4 w-4 text-white" />}
             gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
-            onClick={() => navigate('/dashboard/reports/sales-report')}
+            onClick={() => navigate('/visits')}
             subText="This month"
           />
           <StatCard
@@ -542,49 +538,105 @@ const SalesDashboardPage: React.FC = () => {
 
         {/* ── Charts Row 2 ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Managers Performance */}
+          {/* Orders Summary */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Managers Performance</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Distribution by manager</p>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#088F8F' }}>
+                  <ShoppingCartIcon className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">Orders Summary</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Total quantity ordered per month</p>
+                </div>
               </div>
-              <button
-                onClick={() => navigate('/managers-performance')}
-                className="flex items-center gap-1 text-xs font-medium text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-2.5 py-1.5 rounded-lg transition-colors"
-              >
-                Details <ChevronRightIcon className="h-3 w-3" />
-              </button>
+              {ordersSummary.length > 0 && (
+                <div className="text-right">
+                  <p className="text-xs font-semibold" style={{ color: '#088F8F' }}>
+                    {ordersSummary.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-gray-400">Total quantity</p>
+                </div>
+              )}
             </div>
             {chartsLoading ? (
               <div className="h-52 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent" />
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-t-transparent" style={{ borderColor: '#088F8F' }} />
               </div>
-            ) : managersWithPerformance.length > 0 ? (
+            ) : ordersSummary.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie
-                    data={managersWithPerformance}
-                    cx="50%" cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={100}
-                    dataKey="value"
-                  >
-                    {managersWithPerformance.map((_: any, i: number) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'Performance']}
-                    contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', fontSize: 12 }}
+                <BarChart data={ordersSummary} margin={{ top: 12, right: 20, left: -10, bottom: 8 }}>
+                  <defs>
+                    <filter id="ordersShadow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+                      <feOffset dx="0" dy="2" result="offsetblur" />
+                      <feComponentTransfer>
+                        <feFuncA type="linear" slope="0.3" />
+                      </feComponentTransfer>
+                      <feMerge>
+                        <feMergeNode />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#6b7280" 
+                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                    angle={-35}
+                    textAnchor="end"
+                    height={60}
                   />
-                </PieChart>
+                  <YAxis 
+                    stroke="#6b7280" 
+                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => v.toLocaleString()}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3">
+                            <p className="text-xs font-semibold text-gray-600 mb-1">{payload[0].payload.month}</p>
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#088F8F' }}></div>
+                              <p className="text-sm font-bold text-gray-900">
+                                {payload[0].value?.toLocaleString()} <span className="text-xs font-normal text-gray-500">units</span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="quantity" 
+                    fill="#088F8F" 
+                    radius={[8, 8, 0, 0]}
+                    filter="url(#ordersShadow)"
+                  >
+                    {ordersSummary.map((_: any, index: number) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill="#088F8F"
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-52 flex flex-col items-center justify-center text-gray-400">
-                <PieChartIcon className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-xs">No managers data available</p>
+                <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <ShoppingCartIcon className="h-8 w-8 opacity-40" />
+                </div>
+                <p className="text-xs font-medium">No orders summary data available</p>
+                <p className="text-[10px] text-gray-400 mt-1">Data will appear here once orders are recorded</p>
               </div>
             )}
           </div>
