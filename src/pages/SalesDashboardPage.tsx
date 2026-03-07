@@ -9,7 +9,7 @@ import {
   TrendingUpIcon, UsersIcon, ShoppingCartIcon,
   BarChart3Icon, PieChartIcon, CalendarIcon, MapPinIcon, FileTextIcon,
   X, ChevronRightIcon, ClipboardListIcon, ActivityIcon,
-  CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon,
+  CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon, RotateCcwIcon,
 } from 'lucide-react';
 
 /* ──────────────────────────── StatCard ──────────────────────────── */
@@ -249,6 +249,7 @@ const SalesDashboardPage: React.FC = () => {
         { to: '/overall-attendance', label: 'Sales Rep Report', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-100' },
         { to: '/dashboard/reports/product-performance', label: 'Product Perf.', icon: <PieChartIcon className="h-4 w-4" />, color: 'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-100' },
         { to: '/financial/customer-orders', label: 'Orders Report', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100', badge: newOrdersCount },
+        { to: '/returns', label: 'Product Returns', icon: <RotateCcwIcon className="h-4 w-4" />, color: 'bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100' },
         { to: '/notices', label: 'Notices', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-yellow-50 text-yellow-700 border-yellow-100 hover:bg-yellow-100' },
       ],
     },

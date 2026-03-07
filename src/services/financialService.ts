@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import { 
   ChartOfAccount, 
   Supplier, 
@@ -783,6 +783,73 @@ export const deliveryNoteItemsService = {
 
   delete: async (id: number): Promise<ApiResponse<void>> => {
     const response = await axios.delete(`${API_BASE_URL}/financial/delivery-note-items/${id}`);
+    return response.data;
+  }
+};
+
+// Returns Service
+export interface Return {
+  id: number;
+  so_number: string;
+  client_id: number;
+  order_date: string;
+  salesrep?: number;
+  client_name?: string;
+  client_email?: string;
+  client_contact?: string;
+  region_name?: string;
+  outlet_account_name?: string;
+  salesrep_name?: string;
+}
+
+export interface ReturnItem {
+  id: number;
+  sales_order_id: number;
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  product_code?: string;
+  unit_of_measure?: string;
+}
+
+export const returnsService = {
+  getAll: async (params?: { 
+    client_id?: number;
+    region_id?: string | number;
+    outlet_account_id?: string | number;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<ApiResponse<Return[]>> => {
+    const query = new URLSearchParams();
+    if (params?.client_id) {
+      query.append('client_id', String(params.client_id));
+    }
+    if (params?.region_id) {
+      query.append('region_id', String(params.region_id));
+    }
+    if (params?.outlet_account_id) {
+      query.append('outlet_account_id', String(params.outlet_account_id));
+    }
+    if (params?.start_date) {
+      query.append('start_date', params.start_date);
+    }
+    if (params?.end_date) {
+      query.append('end_date', params.end_date);
+    }
+    const url = query.toString() 
+      ? `${API_BASE_URL}/financial/returns?${query.toString()}`
+      : `${API_BASE_URL}/financial/returns`;
+    const response = await axios.get(url);
+    return response.data;
+  },
+
+  getById: async (id: number): Promise<ApiResponse<Return>> => {
+    const response = await axios.get(`${API_BASE_URL}/financial/returns/${id}`);
+    return response.data;
+  },
+
+  getItems: async (id: number): Promise<ApiResponse<ReturnItem[]>> => {
+    const response = await axios.get(`${API_BASE_URL}/financial/returns/${id}/items`);
     return response.data;
   }
 };
