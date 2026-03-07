@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { clientService, Client as ApiClient } from '../services/clientService';
+import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import {
   Search,
   Plus,
@@ -18,7 +19,10 @@ import {
   ChevronUp,
   ArrowUpDown,
   Building2,
-  Filter
+  Filter,
+  MapPin,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 interface Client {
@@ -50,6 +54,7 @@ interface Client {
   salesRepAssignment?: ClientAssignment | null;
   credit_limit?: number;
   payment_terms?: string;
+  location_locked?: number;
 }
 
 interface Country { id: number; name: string; }
@@ -57,6 +62,208 @@ interface Region { id: number; name: string; }
 interface Route { id: number; name: string; }
 interface SalesRep { id: number; name: string; email: string; phone: string; }
 interface ClientAssignment { id: number; outletId: number; salesRepId: number; assignedAt: string; status: string; sales_rep_name: string; }
+
+const GOOGLE_MAPS_API_KEY = 'AIzaSyDw2uB49lArHYU9raM_rEYn0zTIHO1a5OI';
+
+// Map Modal Component
+const MapModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  client: Client | null;
+}> = ({ isOpen, onClose, client }) => {
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries: ['places']
+  });
+  const [showInfoWindow, setShowInfoWindow] = useState(true);
+  const mapRef = React.useRef<google.maps.Map | null>(null);
+
+  // Parse coordinates as numbers (they might come as strings from the database)
+  const lat = client?.latitude ? parseFloat(String(client.latitude)) : null;
+  const lng = client?.longitude ? parseFloat(String(client.longitude)) : null;
+  
+  // Validate coordinates are within valid ranges
+  const isValidLat = lat !== null && !isNaN(lat) && lat >= -90 && lat <= 90;
+  const isValidLng = lng !== null && !isNaN(lng) && lng >= -180 && lng <= 180;
+  const hasLocation = isValidLat && isValidLng;
+  
+  const center = hasLocation 
+    ? { lat: lat!, lng: lng! }
+    : { lat: -1.286389, lng: 36.817223 }; // Default to Nairobi
+
+  useEffect(() => {
+    if (loadError) {
+      console.error('Google Maps load error:', loadError);
+    }
+    if (isLoaded) {
+      console.log('Google Maps loaded successfully');
+    }
+  }, [isLoaded, loadError]);
+
+  // Debug logging
+  useEffect(() => {
+    if (isOpen && client) {
+      console.log('=== MAP MODAL DEBUG ===');
+      console.log('Client:', client.name);
+      console.log('Raw coordinates:', { 
+        latitude: client.latitude, 
+        longitude: client.longitude,
+        latType: typeof client.latitude,
+        lngType: typeof client.longitude
+      });
+      console.log('Parsed coordinates:', { lat, lng });
+      console.log('Validation:', { isValidLat, isValidLng, hasLocation });
+      console.log('Center position:', center);
+      console.log('Map loaded:', isLoaded);
+      console.log('=====================');
+    }
+  }, [isOpen, client, lat, lng, isValidLat, isValidLng, hasLocation, center, isLoaded]);
+
+  if (!isOpen || !client) return null;
+
+  if (loadError) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Location Map</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="text-red-600">
+            <p className="font-medium mb-2">Error loading map</p>
+            <p className="text-sm">{loadError.message || 'Please check your Google Maps API key and try again.'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const mapContainerStyle = {
+    width: '100%',
+    height: '600px',
+    minHeight: '600px'
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Location Map</h2>
+            <p className="text-sm text-gray-600 mt-1">{client.name}</p>
+            {hasLocation && (
+              <p className="text-xs text-gray-500 mt-1">
+                Coordinates: {lat?.toFixed(6)}, {lng?.toFixed(6)}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div className="w-full" style={{ height: '600px', position: 'relative' }}>
+          {!isLoaded ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Loading map...</p>
+              </div>
+            </div>
+          ) : hasLocation && isLoaded ? (
+            <div style={{ width: '100%', height: '100%' }}>
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={center}
+                zoom={19}
+                onLoad={(map) => {
+                  mapRef.current = map;
+                  console.log('Map loaded, centering on:', { lat, lng, hasLocation });
+                  // Ensure the map is centered exactly on the marker with high zoom
+                  if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    const exactPosition = { lat: Number(lat), lng: Number(lng) };
+                    console.log('Setting map center to:', exactPosition);
+                    // Set center and zoom immediately
+                    map.setCenter(exactPosition);
+                    map.setZoom(19); // Very high zoom level (19 = building level) for exact location
+                    // Small delay to ensure map is fully loaded before final pan
+                    setTimeout(() => {
+                      map.panTo(exactPosition);
+                      map.setZoom(19);
+                      console.log('Map centered and zoomed to exact position:', exactPosition);
+                    }, 300);
+                  } else {
+                    console.error('Invalid coordinates:', { lat, lng });
+                  }
+                }}
+                options={{
+                  disableDefaultUI: false,
+                  zoomControl: true,
+                  streetViewControl: true,
+                  mapTypeControl: true,
+                  fullscreenControl: true,
+                  mapTypeId: google.maps.MapTypeId.ROADMAP,
+                }}
+              >
+                {lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 && (
+                  <>
+                    <Marker
+                      key={`marker-${client.id}-${lat}-${lng}`}
+                      position={{ lat: Number(lat), lng: Number(lng) }}
+                      title={client.name}
+                      animation={google.maps.Animation.DROP}
+                      draggable={false}
+                      onClick={() => {
+                        console.log('Marker clicked at:', { lat: Number(lat), lng: Number(lng) });
+                        setShowInfoWindow(true);
+                        if (mapRef.current) {
+                          const exactPosition = { lat: Number(lat), lng: Number(lng) };
+                          mapRef.current.setCenter(exactPosition);
+                          mapRef.current.setZoom(19); // Zoom in even closer when clicked
+                        }
+                      }}
+                    />
+                    {showInfoWindow && (
+                      <InfoWindow
+                        position={{ lat: Number(lat), lng: Number(lng) }}
+                        onCloseClick={() => setShowInfoWindow(false)}
+                      >
+                        <div>
+                          <strong>{client.name}</strong>
+                          {client.address && <div className="text-sm text-gray-600 mt-1">{client.address}</div>}
+                          {client.contact && <div className="text-sm text-gray-600">Contact: {client.contact}</div>}
+                          <div className="text-xs text-gray-500 mt-1">
+                            Lat: {lat?.toFixed(6)}, Lng: {lng?.toFixed(6)}
+                          </div>
+                        </div>
+                      </InfoWindow>
+                    )}
+                  </>
+                )}
+              </GoogleMap>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gray-50">
+              <div className="text-center">
+                <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600 font-medium">No location data available</p>
+                <p className="text-sm text-gray-500 mt-1">This client doesn't have latitude and longitude coordinates.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AddClientModal: React.FC<{
   isOpen: boolean;
@@ -434,6 +641,8 @@ const ClientsListPage: React.FC = () => {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [allRegions, setAllRegions] = useState<Region[]>([]);
   const [allRoutes, setAllRoutes] = useState<Route[]>([]);
+  const [mapModalOpen, setMapModalOpen] = useState(false);
+  const [selectedClientForMap, setSelectedClientForMap] = useState<Client | null>(null);
 
 
   // Fetch countries when modal opens
@@ -655,6 +864,26 @@ const ClientsListPage: React.FC = () => {
     }
   };
 
+  const handleToggleLocationLock = async (client: Client) => {
+    // Only allow locking if coordinates exist
+    if (!client.latitude || !client.longitude || client.latitude === 0 || client.longitude === 0) {
+      setError('Cannot lock location: Client does not have valid coordinates. Please set latitude and longitude first.');
+      return;
+    }
+    
+    const isLocked = client.location_locked === 1;
+    const action = isLocked ? 'unlock' : 'lock';
+    
+    if (!window.confirm(`Are you sure you want to ${action} the location for ${client.name}?`)) return;
+    
+    try {
+      await axios.patch(`/api/clients/${client.id}/location-lock`, { locked: !isLocked });
+      await fetchClients();
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || `Failed to ${action} location`);
+    }
+  };
+
 
 
 
@@ -769,6 +998,7 @@ const ClientsListPage: React.FC = () => {
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Route</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Outlet Account</th>
+                    <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Geo-Location</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
@@ -796,6 +1026,42 @@ const ClientsListPage: React.FC = () => {
                         <span className="text-xs text-gray-900">{client.outlet_account_name || 'Not assigned'}</span>
                       </td>
                       <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          {client.latitude && client.longitude ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedClientForMap(client);
+                                  setMapModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors"
+                                title="View location on map"
+                              >
+                                <MapPin className="h-3.5 w-3.5" />
+                                <span>View Map</span>
+                              </button>
+                              <button
+                                onClick={() => handleToggleLocationLock(client)}
+                                className={`p-1.5 rounded transition-colors ${
+                                  client.location_locked === 1
+                                    ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
+                                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                }`}
+                                title={client.location_locked === 1 ? 'Location is locked - Click to unlock' : 'Location is unlocked - Click to lock'}
+                              >
+                                {client.location_locked === 1 ? (
+                                  <Lock className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Unlock className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-gray-400">No location</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleEditClick(client)}
@@ -817,7 +1083,7 @@ const ClientsListPage: React.FC = () => {
                   ))}
                   {clients.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center">
+                      <td colSpan={8} className="px-4 py-8 text-center">
                         <Users className="h-8 w-8 text-gray-400 mx-auto mb-3" />
                         <h3 className="text-base font-medium text-gray-900 mb-1">No clients found</h3>
                         <p className="text-xs text-gray-600">Get started by adding your first client.</p>
@@ -1032,6 +1298,16 @@ const ClientsListPage: React.FC = () => {
         onOutletAccountChange={setFilterOutletAccount}
         onApplyFilters={handleApplyFilters}
         onResetFilters={handleResetFilters}
+      />
+
+      {/* Map Modal */}
+      <MapModal
+        isOpen={mapModalOpen}
+        onClose={() => {
+          setMapModalOpen(false);
+          setSelectedClientForMap(null);
+        }}
+        client={selectedClientForMap}
       />
     </div>
   );

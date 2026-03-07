@@ -20,6 +20,7 @@ interface Client {
   contact?: string;
   latitude?: number;
   longitude?: number;
+  location_locked?: number;
 }
 
 interface CreateJourneyPlanModalProps {
@@ -40,6 +41,7 @@ interface JourneyPlanItem {
   latitude?: number;
   longitude?: number;
   routeId?: number | null;
+  location_locked?: number;
 }
 
 const CreateJourneyPlanModal: React.FC<CreateJourneyPlanModalProps> = ({
@@ -217,6 +219,7 @@ const CreateJourneyPlanModal: React.FC<CreateJourneyPlanModalProps> = ({
       latitude: client.latitude || undefined,
       longitude: client.longitude || undefined,
       routeId: salesRep.route_id_update || null,
+      location_locked: client.location_locked || 0,
     };
 
     setJourneyPlanItems(prev => [...prev, newItem]);
@@ -262,6 +265,7 @@ const CreateJourneyPlanModal: React.FC<CreateJourneyPlanModalProps> = ({
           latitude: item.latitude,
           longitude: item.longitude,
           routeId: item.routeId || null,
+          location_locked: item.location_locked || 0,
         };
         
         console.log('Creating journey plan with data:', requestBody);
