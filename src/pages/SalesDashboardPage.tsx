@@ -118,7 +118,7 @@ const SalesDashboardPage: React.FC = () => {
   const [activeRepsModalOpen, setActiveRepsModalOpen] = useState(false);
   const [activeSalesReps, setActiveSalesReps] = useState<Array<{
     id: number; name: string; email?: string;
-    route_name?: string; region_name?: string; checkInTime?: string;
+    route_name?: string; region_name?: string; checkInTime?: string; checkoutTime?: string;
   }>>([]);
   const [loadingActiveReps, setLoadingActiveReps] = useState(false);
 
@@ -713,17 +713,17 @@ const SalesDashboardPage: React.FC = () => {
       {/* ──────────── Checked-In Reps Modal ──────────── */}
       {activeRepsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden" style={{ maxHeight: '95vh' }}>
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-purple-600 to-indigo-600 flex-shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                   <UsersIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-xs sm:text-sm font-bold text-white truncate">Checked-In Sales Reps</h2>
-                  <p className="text-[10px] sm:text-xs text-purple-200 truncate">
+                  <p className="text-[9px] sm:text-[10px] text-purple-200 truncate">
                     {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   </p>
                 </div>
@@ -737,9 +737,9 @@ const SalesDashboardPage: React.FC = () => {
             </div>
 
             {/* Summary strip */}
-            <div className="flex items-center justify-between px-4 sm:px-6 py-2 sm:py-2.5 bg-purple-50 border-b border-purple-100 flex-shrink-0">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-2.5 sm:py-3 bg-purple-50 border-b border-purple-100 flex-shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <span className="text-xs sm:text-sm font-bold text-purple-800 text-base sm:text-lg leading-none">{activeSalesReps.length}</span>
+                <span className="text-sm sm:text-base font-bold text-purple-800 leading-none">{activeSalesReps.length}</span>
                 <span className="text-[10px] sm:text-xs text-purple-600">reps checked in today</span>
                 {stats.totalActiveReps > 0 && (
                   <span className="px-1.5 sm:px-2 py-0.5 bg-purple-200 text-purple-800 text-[9px] sm:text-[10px] font-bold rounded-full">
@@ -750,38 +750,69 @@ const SalesDashboardPage: React.FC = () => {
             </div>
 
             {/* Body */}
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 p-2 sm:p-0">
               {loadingActiveReps ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                   <div className="animate-spin rounded-full h-10 w-10 border-2 border-purple-500 border-t-transparent mb-4" />
-                  <p className="text-sm">Loading checked-in reps...</p>
+                  <p className="text-xs sm:text-sm">Loading checked-in reps...</p>
                 </div>
               ) : activeSalesReps.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                   <AlertCircleIcon className="h-10 w-10 mb-3 opacity-40" />
-                  <p className="text-sm font-medium">No reps have checked in today</p>
+                  <p className="text-xs sm:text-sm font-medium">No reps have checked in today</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
                   <table className="min-w-full">
                     <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>
-                        {['#', 'Name', 'Check-In', 'Route', 'Region'].map(h => (
-                          <th key={h} className="px-2 sm:px-4 py-2 sm:py-2.5 text-left text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        {['#', 'Name', 'Check-In', 'Check-Out', 'Time Spent', 'Route', 'Region'].map(h => (
+                          <th key={h} className="px-2 sm:px-4 py-2 sm:py-3 text-left text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-100">
                       {activeSalesReps.map((rep, idx) => {
                         const checkInTime = rep.checkInTime
                           ? new Date(rep.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                           : '—';
+                        const checkoutTime = rep.checkoutTime
+                          ? new Date(rep.checkoutTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                          : '—';
                         const isEarly = rep.checkInTime
                           ? new Date(rep.checkInTime).getHours() < 8
                           : false;
+                        
+                        // Calculate time spent
+                        let timeSpent = '—';
+                        if (rep.checkInTime && rep.checkoutTime) {
+                          const checkIn = new Date(rep.checkInTime);
+                          const checkout = new Date(rep.checkoutTime);
+                          const diffMs = checkout.getTime() - checkIn.getTime();
+                          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                          const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                          if (diffHours > 0) {
+                            timeSpent = `${diffHours}h ${diffMinutes}m`;
+                          } else {
+                            timeSpent = `${diffMinutes}m`;
+                          }
+                        } else if (rep.checkInTime) {
+                          // If checked in but not checked out, show time since check-in
+                          const checkIn = new Date(rep.checkInTime);
+                          const now = new Date();
+                          const diffMs = now.getTime() - checkIn.getTime();
+                          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                          const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                          if (diffHours > 0) {
+                            timeSpent = `${diffHours}h ${diffMinutes}m`;
+                          } else {
+                            timeSpent = `${diffMinutes}m`;
+                          }
+                        }
+                        
                         return (
                           <tr key={rep.id} className="hover:bg-purple-50/50 transition-colors">
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-400 w-6 sm:w-8">{idx + 1}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-400 font-medium w-6 sm:w-8">{idx + 1}</td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3">
                               <div className="flex items-center gap-1.5 sm:gap-2">
                                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-[9px] sm:text-[10px] font-bold flex-shrink-0">
@@ -795,8 +826,18 @@ const SalesDashboardPage: React.FC = () => {
                                 {checkInTime}
                               </span>
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{rep.route_name || '—'}</td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{rep.region_name || '—'}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <span className="text-[10px] sm:text-xs font-semibold text-gray-600">
+                                {checkoutTime}
+                              </span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3">
+                              <span className="text-[10px] sm:text-xs font-medium text-blue-600">
+                                {timeSpent}
+                              </span>
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-600 truncate max-w-[80px] sm:max-w-none">{rep.route_name || '—'}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-600 truncate max-w-[80px] sm:max-w-none">{rep.region_name || '—'}</td>
                           </tr>
                         );
                       })}
@@ -807,19 +848,13 @@ const SalesDashboardPage: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-0 px-4 sm:px-6 py-3 bg-gray-50 border-t border-gray-100 flex-shrink-0">
-              <button
-                onClick={() => { setActiveRepsModalOpen(false); navigate('/sales-reps', { state: { filterStatus: '1' } }); }}
-                className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 border border-purple-200 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-medium text-purple-700 bg-white hover:bg-purple-50 transition-colors"
-              >
-                View All Active Reps <ChevronRightIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              </button>
-              <button
-                onClick={() => setActiveRepsModalOpen(false)}
-                className="px-4 sm:px-5 py-2 text-[10px] sm:text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg sm:rounded-xl transition-all shadow-sm"
-              >
-                Close
-              </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-0 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex-shrink-0">
+                <button
+                  onClick={() => setActiveRepsModalOpen(false)}
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 text-[10px] sm:text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg sm:rounded-xl transition-all shadow-sm"
+                >
+                  Close
+                </button>
             </div>
           </div>
         </div>
