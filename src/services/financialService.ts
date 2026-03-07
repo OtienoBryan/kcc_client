@@ -808,6 +808,7 @@ export interface ReturnItem {
   product_id: number;
   product_name: string;
   quantity: number;
+  return_reason?: string;
   product_code?: string;
   unit_of_measure?: string;
 }

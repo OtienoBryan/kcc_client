@@ -475,47 +475,49 @@ const ReturnsPage: React.FC = () => {
 
           {/* Return Items Modal */}
           {modalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-              <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30 p-2 sm:p-4">
+              <div className="bg-white rounded-lg shadow-lg max-w-5xl w-full p-4 sm:p-6 relative max-h-[95vh] overflow-y-auto">
                 <button 
                   onClick={closeModal} 
-                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl"
+                  className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl sm:text-2xl"
                 >
                   &times;
                 </button>
-                <h2 className="text-xl font-bold mb-4">Return Items for {selectedReturn?.so_number}</h2>
+                <h2 className="text-base sm:text-lg font-bold mb-3 sm:mb-4">Return Items for {selectedReturn?.so_number}</h2>
                 {selectedReturn && (
-                  <div className="mb-4 text-sm text-gray-600">
+                  <div className="mb-3 sm:mb-4 text-xs sm:text-sm text-gray-600">
                     <p><strong>Client:</strong> {selectedReturn.client_name || 'N/A'}</p>
                     <p><strong>Order Date:</strong> {formatDate(selectedReturn.order_date)}</p>
                   </div>
                 )}
                 {modalLoading ? (
                   <div className="flex justify-center items-center h-24">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600"></div>
                   </div>
                 ) : modalError ? (
-                  <div className="text-red-600 text-center">{modalError}</div>
+                  <div className="text-red-600 text-center text-xs sm:text-sm">{modalError}</div>
                 ) : returnItems.length === 0 ? (
-                  <div className="text-gray-500 text-center">No items found for this return.</div>
+                  <div className="text-gray-500 text-center text-xs sm:text-sm">No items found for this return.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product Name</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product Code</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
+                          <th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Product Name</th>
+                          <th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Product Code</th>
+                          <th className="px-3 sm:px-4 py-2 text-right text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                          <th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Unit</th>
+                          <th className="px-3 sm:px-4 py-2 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">Reason</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {returnItems.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{item.product_name}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600">{item.product_code || 'N/A'}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right font-medium">{item.quantity}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-600">{item.unit_of_measure || 'PCS'}</td>
+                          <tr key={item.id} className="hover:bg-gray-50">
+                            <td className="px-3 sm:px-4 py-2 whitespace-nowrap text-[10px] sm:text-xs text-gray-900">{item.product_name}</td>
+                            <td className="px-3 sm:px-4 py-2 whitespace-nowrap text-[10px] sm:text-xs text-gray-600">{item.product_code || 'N/A'}</td>
+                            <td className="px-3 sm:px-4 py-2 whitespace-nowrap text-[10px] sm:text-xs text-right font-medium">{item.quantity}</td>
+                            <td className="px-3 sm:px-4 py-2 whitespace-nowrap text-[10px] sm:text-xs text-gray-600">{item.unit_of_measure || 'PCS'}</td>
+                            <td className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs text-gray-900">{item.return_reason && item.return_reason.trim() ? item.return_reason : 'N/A'}</td>
                           </tr>
                         ))}
                       </tbody>
