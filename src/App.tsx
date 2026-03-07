@@ -82,6 +82,7 @@ import BrandsPage from './pages/BrandsPage';
 import OutletAccountsPage from './pages/OutletAccountsPage';
 import BrandSosTargetsPage from './pages/BrandSosTargetsPage';
 import SalesDashboardPage from './pages/SalesDashboardPage';
+import TeamLeaderDashboardPage from './pages/TeamLeaderDashboardPage';
 import SalesRepsPage from './pages/SalesRepsPage';
 import ManagersPage from './pages/ManagersPage';
 import SalesRepDetailsPage from './pages/SalesRepDetailsPage';
@@ -201,6 +202,8 @@ const RoleBasedDashboardRedirect = () => {
   // Redirect users to their appropriate dashboard based on role
   if (user.role === 'sales') {
     return <Navigate to="/sales-dashboard" replace />;
+  } else if (user.role === 'leader') {
+    return <Navigate to="/team-leader-dashboard" replace />;
   } else if (user.role === 'hr') {
     return <Navigate to="/hr-dashboard" replace />;
   } else if (user.role === 'stock') {
@@ -229,6 +232,8 @@ const LoginRoute = () => {
     // Redirect users to their appropriate dashboard based on role
     if (user.role === 'sales') {
       return <Navigate to="/sales-dashboard" replace />;
+    } else if (user.role === 'leader') {
+      return <Navigate to="/team-leader-dashboard" replace />;
     } else if (user.role === 'hr') {
       return <Navigate to="/hr-dashboard" replace />;
     } else if (user.role === 'stock') {
@@ -700,6 +705,11 @@ const App = () => {
             <Route path="/sales-dashboard" element={
               <RoleBasedRoute allowedRoles={['sales']} fallbackPath="/">
                 <SalesDashboardPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/team-leader-dashboard" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'leader']} fallbackPath="/">
+                <TeamLeaderDashboardPage />
               </RoleBasedRoute>
             } />
             <Route path="/master-sales" element={<MasterSalesPage />} />

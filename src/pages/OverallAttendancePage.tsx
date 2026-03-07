@@ -114,12 +114,25 @@ const OverallAttendancePage: React.FC = () => {
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
 
+    // Build sales reps URL with leader_id filter if user is a leader
+    const salesRepsParams = new URLSearchParams();
+    salesRepsParams.append('status', '1');
+    if (user?.role === 'leader' && user?.id) {
+      salesRepsParams.append('leader_id', user.id.toString());
+    }
+    
+    // Build journey plans URL with team_leader_id filter if user is a leader
+    const journeyPlansParams = new URLSearchParams(params);
+    if (user?.role === 'leader' && user?.id) {
+      journeyPlansParams.append('team_leader_id', user.id.toString());
+    }
+    
     Promise.all([
       axios.get(`${API_BASE_URL}/login-history?${params.toString()}`, { headers: getAuthHeaders(), signal }),
-      axios.get(`${API_BASE_URL}/journey-plans?${params.toString()}`, { headers: getAuthHeaders(), signal }),
+      axios.get(`${API_BASE_URL}/journey-plans?${journeyPlansParams.toString()}`, { headers: getAuthHeaders(), signal }),
       axios.get(`${API_BASE_URL}/clients?limit=1`, { headers: getAuthHeaders(), signal }),
       salesService.getCountries(),
-      salesService.getAllSalesReps(),
+      axios.get(`${API_BASE_URL}/sales-reps?${salesRepsParams.toString()}`, { headers: getAuthHeaders(), signal }),
     ])
       .then(([loginRes, journeyRes, clientsRes, countriesRes, salesRepsRes]) => {
                  console.log('OverallAttendancePage: Data fetch successful');
@@ -127,7 +140,11 @@ const OverallAttendancePage: React.FC = () => {
          console.log('Journey plans count:', journeyRes.data?.length || 0);
         console.log('Clients meta:', clientsRes.data);
          console.log('Countries count:', countriesRes?.length || 0);
-         console.log('Sales reps count:', salesRepsRes?.length || 0);
+         // Handle sales reps response format
+         const salesRepsData = salesRepsRes.data?.success && Array.isArray(salesRepsRes.data.data)
+           ? salesRepsRes.data.data
+           : (Array.isArray(salesRepsRes.data) ? salesRepsRes.data : []);
+         console.log('Sales reps count:', salesRepsData?.length || 0);
          
          // Debug: Check sample data structures
          if (loginRes.data?.length > 0) {
@@ -136,15 +153,15 @@ const OverallAttendancePage: React.FC = () => {
          if (journeyRes.data?.length > 0) {
            console.log('Sample journey plan:', journeyRes.data[0]);
          }
-         if (salesRepsRes?.length > 0) {
-           console.log('Sample sales rep:', salesRepsRes[0]);
+         if (salesRepsData?.length > 0) {
+           console.log('Sample sales rep:', salesRepsData[0]);
          }
         
         console.log('Setting state with data:');
         console.log('loginRes.data type:', typeof loginRes.data, 'isArray:', Array.isArray(loginRes.data));
         console.log('journeyRes.data type:', typeof journeyRes.data, 'isArray:', Array.isArray(journeyRes.data));
         console.log('clientsRes.data type:', typeof clientsRes.data, 'isArray:', Array.isArray(clientsRes.data));
-        console.log('salesRepsRes type:', typeof salesRepsRes, 'isArray:', Array.isArray(salesRepsRes));
+        console.log('salesRepsRes type:', typeof salesRepsData, 'isArray:', Array.isArray(salesRepsData));
         
         setLoginHistory(Array.isArray(loginRes.data) ? loginRes.data : []);
         setJourneyPlans(Array.isArray(journeyRes.data) ? journeyRes.data : []);
@@ -154,7 +171,7 @@ const OverallAttendancePage: React.FC = () => {
           : (Array.isArray(clientsRes.data?.data) ? clientsRes.data.data.length : (Array.isArray(clientsRes.data) ? clientsRes.data.length : 0));
         setTotalClients(total || 0);
         setCountries(Array.isArray(countriesRes) ? countriesRes : []);
-        setSalesReps(Array.isArray(salesRepsRes) ? salesRepsRes : []);
+        setSalesReps(Array.isArray(salesRepsData) ? salesRepsData : []);
         setLoading(false);
       })
       .catch((error) => {
@@ -164,7 +181,7 @@ const OverallAttendancePage: React.FC = () => {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, user?.role, user?.id]);
 
   // Fetch user's country and set default filter
   useEffect(() => {

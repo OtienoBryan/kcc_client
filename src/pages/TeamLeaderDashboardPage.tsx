@@ -5,6 +5,7 @@ import {
   LineChart, Line, Cell
 } from 'recharts';
 import { API_CONFIG } from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
 import {
   TrendingUpIcon, UsersIcon, ShoppingCartIcon,
   BarChart3Icon, PieChartIcon, CalendarIcon, MapPinIcon, FileTextIcon,
@@ -89,11 +90,13 @@ const SkeletonChart = memo(() => (
 SkeletonChart.displayName = 'SkeletonChart';
 
 /* ──────────────────────────── Main Page ──────────────────────────── */
-const SalesDashboardPage: React.FC = () => {
+const TeamLeaderDashboardPage: React.FC = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartsLoading, setChartsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const [teamLeaderRegion, setTeamLeaderRegion] = useState<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -103,24 +106,56 @@ const SalesDashboardPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Fetch team leader's region from their assigned sales reps
+  useEffect(() => {
+    const fetchTeamLeaderRegion = async () => {
+      if (!user?.id) return;
+      try {
+        const response = await fetch(`${API_CONFIG.getUrl('/api/sales/sales-reps')}?leader_id=${user.id}&status=1`, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const salesReps = Array.isArray(data) ? data : (data.data || []);
+          // Get region from first sales rep (assuming all team members are in same region)
+          if (salesReps.length > 0 && salesReps[0].region) {
+            setTeamLeaderRegion(salesReps[0].region);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch team leader region:', err);
+      }
+    };
+    if (user?.id) {
+      fetchTeamLeaderRegion();
+    }
+  }, [user?.id]);
+
   const [stats, setStats] = useState({
-    totalSales: 0, outletsVisitedThisMonth: 0, totalOrders: 0, activeReps: 0,
-    checkedInReps: 0, totalActiveReps: 0, avgPerformance: 0,
+    teamMembers: 0,
+    outletsVisitedThisMonth: 0,
+    totalOrders: 0,
+    checkedInMembers: 0,
+    totalActiveMembers: 0,
+    avgTeamPerformance: 0,
   });
   const [planogramComplianceData, setPlanogramComplianceData] = useState<{ month: string; compliance: number }[]>([]);
-  const [topReps, setTopReps] = useState<{ name: string; overall: number }[]>([]);
+  const [topTeamMembers, setTopTeamMembers] = useState<{ name: string; overall: number }[]>([]);
   const [pendingLeavesCount, setPendingLeavesCount] = useState(0);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [outletsVisited, setOutletsVisited] = useState<{ month: string; outlets: number }[]>([]);
   const [ordersSummary, setOrdersSummary] = useState<{ month: string; quantity: number }[]>([]);
 
-  // Checked-in reps modal
-  const [activeRepsModalOpen, setActiveRepsModalOpen] = useState(false);
-  const [activeSalesReps, setActiveSalesReps] = useState<Array<{
+  // Checked-in team members modal
+  const [activeMembersModalOpen, setActiveMembersModalOpen] = useState(false);
+  const [activeTeamMembers, setActiveTeamMembers] = useState<Array<{
     id: number; name: string; email?: string;
     route_name?: string; region_name?: string; checkInTime?: string;
   }>>([]);
-  const [loadingActiveReps, setLoadingActiveReps] = useState(false);
+  const [loadingActiveMembers, setLoadingActiveMembers] = useState(false);
 
   const navigate = useNavigate();
 
@@ -140,15 +175,35 @@ const SalesDashboardPage: React.FC = () => {
 
   /* ── core data ── */
   const fetchCoreData = useCallback(async () => {
+    if (!user?.id) return;
+    
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchData('/dashboard/sales-dashboard-data');
+      // Build query params for filtering by team leader ID and region
+      const params: any = {
+        team_leader_id: user.id
+      };
+      if (teamLeaderRegion) {
+        params.region = teamLeaderRegion;
+      }
+      
+      // Try team leader specific endpoint first, fallback to sales dashboard
+      const result = await fetchData('/dashboard/team-leader-dashboard-data', params).catch(() => 
+        fetchData('/dashboard/sales-dashboard-data', params)
+      );
       if (result.success && result.data) {
         const d = result.data;
-        setStats(d.stats);
+        setStats({
+          teamMembers: d.stats?.teamMembers || d.stats?.totalActiveReps || 0,
+          outletsVisitedThisMonth: d.stats?.outletsVisitedThisMonth || 0,
+          totalOrders: d.stats?.totalOrders || 0,
+          checkedInMembers: d.stats?.checkedInMembers || d.stats?.checkedInReps || 0,
+          totalActiveMembers: d.stats?.totalActiveMembers || d.stats?.totalActiveReps || 0,
+          avgTeamPerformance: d.stats?.avgTeamPerformance || d.stats?.avgPerformance || 0,
+        });
         setPlanogramComplianceData(d.planogramComplianceData || []);
-        setTopReps(d.topReps || []);
+        setTopTeamMembers(d.topTeamMembers || d.topReps || []);
         setPendingLeavesCount(d.pendingLeavesCount || 0);
         setNewOrdersCount(d.newOrdersCount || 0);
       }
@@ -157,14 +212,24 @@ const SalesDashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchData]);
+  }, [fetchData, user?.id, teamLeaderRegion]);
 
   /* ── charts data ── */
   const fetchChartsData = useCallback(async () => {
+    if (!user?.id) return;
+    
     try {
+      // Build query params for filtering by team leader ID and region
+      const params: any = {
+        team_leader_id: user.id
+      };
+      if (teamLeaderRegion) {
+        params.region = teamLeaderRegion;
+      }
+      
       const [outletsResult, ordersSummaryResult] = await Promise.all([
-        fetchData('/dashboard/outlets-visited'),
-        fetchData('/dashboard/orders-summary')
+        fetchData('/dashboard/outlets-visited', params),
+        fetchData('/dashboard/orders-summary', params)
       ]);
       if (outletsResult.success && outletsResult.data) {
         setOutletsVisited(outletsResult.data || []);
@@ -177,7 +242,7 @@ const SalesDashboardPage: React.FC = () => {
     } finally {
       setChartsLoading(false);
     }
-  }, [fetchData]);
+  }, [fetchData, user?.id, teamLeaderRegion]);
 
   useEffect(() => { fetchCoreData(); }, [fetchCoreData]);
   useEffect(() => {
@@ -193,43 +258,55 @@ const SalesDashboardPage: React.FC = () => {
     await fetchChartsData();
   }, [fetchCoreData, fetchChartsData]);
 
-  /* ── checked-in reps ── */
-  const fetchActiveSalesReps = useCallback(async () => {
-    setLoadingActiveReps(true);
+  /* ── checked-in team members ── */
+  const fetchActiveTeamMembers = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setLoadingActiveMembers(true);
     try {
-      const result = await fetchData('/dashboard/checked-in-sales-reps');
+      // Build query params for filtering by team leader ID and region
+      const params: any = {
+        team_leader_id: user.id
+      };
+      if (teamLeaderRegion) {
+        params.region = teamLeaderRegion;
+      }
+      
+      const result = await fetchData('/dashboard/checked-in-sales-reps', params).catch(() => 
+        fetchData('/dashboard/checked-in-team-members', params)
+      );
       if (result.success && result.data) {
-        const reps = Array.isArray(result.data) ? result.data : [];
-        setActiveSalesReps(
-          [...reps].sort((a: any, b: any) =>
-            new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+        const members = Array.isArray(result.data) ? result.data : [];
+        setActiveTeamMembers(
+          [...members].sort((a: any, b: any) =>
+            new Date(a.checkInTime || 0).getTime() - new Date(b.checkInTime || 0).getTime()
           )
         );
       } else {
-        setActiveSalesReps([]);
+        setActiveTeamMembers([]);
       }
     } catch {
-      setActiveSalesReps([]);
+      setActiveTeamMembers([]);
     } finally {
-      setLoadingActiveReps(false);
+      setLoadingActiveMembers(false);
     }
-  }, [fetchData]);
+  }, [fetchData, user?.id, teamLeaderRegion]);
 
-  const openActiveRepsModal = useCallback(() => {
-    setActiveRepsModalOpen(true);
-    fetchActiveSalesReps();
-  }, [fetchActiveSalesReps]);
+  const openActiveMembersModal = useCallback(() => {
+    setActiveMembersModalOpen(true);
+    fetchActiveTeamMembers();
+  }, [fetchActiveTeamMembers]);
 
   /* ── navigation ── */
   const navGroups = useMemo(() => [
     {
-      label: 'People',
+      label: 'Team Management',
       items: [
-        { to: '/sales-reps', label: 'Sales Reps', icon: <UsersIcon className="h-4 w-4" />, color: 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100' },
-        { to: '/dashboard/route-compliance', label: 'Rep Compliance', icon: <CheckCircle2Icon className="h-4 w-4" />, color: 'bg-lime-50 text-lime-700 border-lime-100 hover:bg-lime-100' },
-        { to: '/sales-rep-leaves', label: 'Rep Leaves', icon: <CalendarIcon className="h-4 w-4" />, color: 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100', badge: pendingLeavesCount },
+        { to: '/sales-reps', label: 'Team Members', icon: <UsersIcon className="h-4 w-4" />, color: 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100' },
+        { to: '/dashboard/route-compliance', label: 'Team Compliance', icon: <CheckCircle2Icon className="h-4 w-4" />, color: 'bg-lime-50 text-lime-700 border-lime-100 hover:bg-lime-100' },
+        { to: '/sales-rep-leaves', label: 'Team Leaves', icon: <CalendarIcon className="h-4 w-4" />, color: 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100', badge: pendingLeavesCount },
         { to: '/sales-rep-working-days', label: 'Working Days', icon: <ClipboardListIcon className="h-4 w-4" />, color: 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100' },
-        { to: '/sales-rep-attendance', label: 'Rep Attendance', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100' },
+        { to: '/sales-rep-attendance', label: 'Team Attendance', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100' },
       ],
     },
     {
@@ -245,8 +322,8 @@ const SalesDashboardPage: React.FC = () => {
     {
       label: 'Reports & Analytics',
       items: [
-        { to: '/shared-performance', label: 'Rep Performance', icon: <TrendingUpIcon className="h-4 w-4" />, color: 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100' },
-        { to: '/overall-attendance', label: 'Sales Rep Report', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-100' },
+        { to: '/shared-performance', label: 'Team Performance', icon: <TrendingUpIcon className="h-4 w-4" />, color: 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100' },
+        { to: '/overall-attendance', label: 'Team Report', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-100' },
         { to: '/dashboard/reports/product-performance', label: 'Product Perf.', icon: <PieChartIcon className="h-4 w-4" />, color: 'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-100' },
         { to: '/financial/customer-orders', label: 'Orders Report', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100', badge: newOrdersCount },
         { to: '/notices', label: 'Notices', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-yellow-50 text-yellow-700 border-yellow-100 hover:bg-yellow-100' },
@@ -254,9 +331,8 @@ const SalesDashboardPage: React.FC = () => {
     },
   ], [pendingLeavesCount, newOrdersCount]);
 
-
-  const checkedInPct = stats.totalActiveReps > 0
-    ? ((stats.checkedInReps || 0) / stats.totalActiveReps * 100).toFixed(1)
+  const checkedInPct = stats.totalActiveMembers > 0
+    ? ((stats.checkedInMembers || 0) / stats.totalActiveMembers * 100).toFixed(1)
     : '0.0';
 
   /* ── loading / error ── */
@@ -294,37 +370,17 @@ const SalesDashboardPage: React.FC = () => {
   /* ──────────────────────────── RENDER ──────────────────────────── */
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ── Top Banner ── */}
-      {/* <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white px-4 lg:px-8 py-4">
-        <div className="w-full flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">NKCC</h1>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-2 text-xs font-medium bg-white/10 hover:bg-white/20 rounded-xl transition-colors disabled:opacity-50"
-          >
-            <RefreshCwIcon className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
-      </div> */}
-
       <div className="w-full px-3 sm:px-4 lg:px-6 py-3 sm:py-4 space-y-4 sm:space-y-5">
 
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <StatCard
-            title="Outlets Visited"
-            value={Number(stats.outletsVisitedThisMonth || 0).toLocaleString()}
-            icon={<MapPinIcon className="h-4 w-4 text-white" />}
+            title="Team Members"
+            value={stats.teamMembers}
+            icon={<UsersIcon className="h-4 w-4 text-white" />}
             gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
-            onClick={() => navigate('/visits')}
-            subText="This month"
+            onClick={() => navigate('/sales-reps')}
+            subText="Active members"
           />
           <StatCard
             title="Total Orders"
@@ -335,20 +391,20 @@ const SalesDashboardPage: React.FC = () => {
             subText="This month"
           />
           <StatCard
-            title="Checked-In Reps"
-            value={`${stats.checkedInReps || 0} / ${stats.totalActiveReps || 0}`}
+            title="Checked-In"
+            value={`${stats.checkedInMembers || 0} / ${stats.totalActiveMembers || 0}`}
             icon={<UsersIcon className="h-4 w-4 text-white" />}
-            suffix={`${checkedInPct}% of active reps`}
+            suffix={`${checkedInPct}% of team`}
             gradient="bg-gradient-to-br from-purple-500 to-purple-700"
-            onClick={openActiveRepsModal}
+            onClick={openActiveMembersModal}
           />
           <StatCard
-            title="Avg Performance"
-            value={`${stats.avgPerformance}%`}
+            title="Team Performance"
+            value={`${stats.avgTeamPerformance}%`}
             icon={<TrendingUpIcon className="h-5 w-5 text-white" />}
             gradient="bg-gradient-to-br from-orange-500 to-orange-700"
             onClick={() => navigate('/shared-performance')}
-            subText="Overall score"
+            subText="Average score"
           />
         </div>
 
@@ -388,7 +444,7 @@ const SalesDashboardPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
               <div className="flex-1">
                 <h2 className="text-xs sm:text-sm font-bold text-gray-900">Planogram Compliance</h2>
-                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">Overall compliance trend</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">Team compliance trend</p>
               </div>
               <button
                 onClick={() => navigate('/planogram-compliance-report')}
@@ -410,12 +466,12 @@ const SalesDashboardPage: React.FC = () => {
                   <XAxis 
                     dataKey="month" 
                     stroke="#9ca3af" 
-                    tick={{ fontSize: window.innerWidth < 640 ? 9 : 11 }} 
+                    tick={{ fontSize: isMobile ? 9 : 11 }} 
                     angle={isMobile ? -45 : 0}
                     textAnchor={isMobile ? 'end' : 'middle'}
                     height={isMobile ? 50 : 30}
                   />
-                  <YAxis stroke="#9ca3af" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: window.innerWidth < 640 ? 9 : 11 }} />
+                  <YAxis stroke="#9ca3af" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: isMobile ? 9 : 11 }} />
                   <Tooltip
                     formatter={(v: any) => [`${v}%`, 'Compliance']}
                     contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 12 }}
@@ -443,7 +499,7 @@ const SalesDashboardPage: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-xs sm:text-sm font-bold text-gray-900 truncate">Outlets Visited</h2>
-                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 line-clamp-1">Unique outlets visited per month</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 line-clamp-1">Team outlets per month</p>
                 </div>
               </div>
               {outletsVisited.length > 0 && (
@@ -487,19 +543,20 @@ const SalesDashboardPage: React.FC = () => {
                   <XAxis 
                     dataKey="month" 
                     stroke="#6b7280" 
-                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    tick={{ fontSize: isMobile ? 8 : 10, fill: '#6b7280' }}
                     axisLine={false}
                     tickLine={false}
-                    angle={-35}
+                    angle={isMobile ? -45 : -35}
                     textAnchor="end"
-                    height={60}
+                    height={isMobile ? 70 : 60}
                   />
                   <YAxis 
                     stroke="#6b7280" 
-                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    tick={{ fontSize: isMobile ? 8 : 10, fill: '#6b7280' }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v) => v.toLocaleString()}
+                    width={isMobile ? 35 : 50}
                   />
                   <Tooltip
                     content={({ active, payload }) => {
@@ -561,7 +618,7 @@ const SalesDashboardPage: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-xs sm:text-sm font-bold text-gray-900 truncate">Orders Summary</h2>
-                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 line-clamp-1">Total quantity ordered per month</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 line-clamp-1">Team orders per month</p>
                 </div>
               </div>
               {ordersSummary.length > 0 && (
@@ -656,12 +713,12 @@ const SalesDashboardPage: React.FC = () => {
             )}
           </div>
 
-          {/* Top 10 Sales Reps */}
+          {/* Top Team Members */}
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-0">
               <div className="flex-1">
-                <h2 className="text-xs sm:text-sm font-bold text-gray-900">Top 10 Sales Reps</h2>
-                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">Overall performance score</p>
+                <h2 className="text-xs sm:text-sm font-bold text-gray-900">Top Team Members</h2>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">Performance score</p>
               </div>
               <button
                 onClick={() => navigate('/shared-performance')}
@@ -670,16 +727,16 @@ const SalesDashboardPage: React.FC = () => {
                 Details <ChevronRightIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               </button>
             </div>
-            {topReps.length > 0 ? (
+            {topTeamMembers.length > 0 ? (
               <ResponsiveContainer width="100%" height={isMobile ? 200 : 240}>
-                <BarChart data={topReps} layout="vertical" margin={{ top: 0, right: window.innerWidth < 640 ? 8 : 24, left: 0, bottom: 0 }}>
+                <BarChart data={topTeamMembers} layout="vertical" margin={{ top: 0, right: isMobile ? 8 : 24, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
                   <XAxis 
                     type="number" 
                     domain={[0, 100]} 
                     tickFormatter={v => `${v}%`} 
                     stroke="#9ca3af" 
-                    tick={{ fontSize: window.innerWidth < 640 ? 9 : 11 }} 
+                    tick={{ fontSize: isMobile ? 9 : 11 }} 
                   />
                   <YAxis 
                     type="category" 
@@ -693,7 +750,7 @@ const SalesDashboardPage: React.FC = () => {
                     contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', fontSize: 12 }}
                   />
                   <Bar dataKey="overall" fill="#f59e0b" name="Overall %" radius={[0, 4, 4, 0]}>
-                    {topReps.map((_: any, i: number) => (
+                    {topTeamMembers.map((_: any, i: number) => (
                       <Cell key={i} fill={i < 3 ? '#f59e0b' : '#fbbf24'} />
                     ))}
                   </Bar>
@@ -702,15 +759,15 @@ const SalesDashboardPage: React.FC = () => {
             ) : (
               <div className="h-52 flex flex-col items-center justify-center text-gray-400">
                 <BarChart3Icon className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-xs">No sales reps data available</p>
+                <p className="text-xs">No team members data available</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ──────────── Checked-In Reps Modal ──────────── */}
-      {activeRepsModalOpen && (
+      {/* ──────────── Checked-In Team Members Modal ──────────── */}
+      {activeMembersModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
 
@@ -721,14 +778,14 @@ const SalesDashboardPage: React.FC = () => {
                   <UsersIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-xs sm:text-sm font-bold text-white truncate">Checked-In Sales Reps</h2>
+                  <h2 className="text-xs sm:text-sm font-bold text-white truncate">Checked-In Team Members</h2>
                   <p className="text-[10px] sm:text-xs text-purple-200 truncate">
                     {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setActiveRepsModalOpen(false)}
+                onClick={() => setActiveMembersModalOpen(false)}
                 className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors flex-shrink-0 ml-2"
               >
                 <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
@@ -738,9 +795,9 @@ const SalesDashboardPage: React.FC = () => {
             {/* Summary strip */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-2 sm:py-2.5 bg-purple-50 border-b border-purple-100 flex-shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <span className="text-xs sm:text-sm font-bold text-purple-800 text-base sm:text-lg leading-none">{activeSalesReps.length}</span>
-                <span className="text-[10px] sm:text-xs text-purple-600">reps checked in today</span>
-                {stats.totalActiveReps > 0 && (
+                <span className="text-xs sm:text-sm font-bold text-purple-800 text-base sm:text-lg leading-none">{activeTeamMembers.length}</span>
+                <span className="text-[10px] sm:text-xs text-purple-600">members checked in today</span>
+                {stats.totalActiveMembers > 0 && (
                   <span className="px-1.5 sm:px-2 py-0.5 bg-purple-200 text-purple-800 text-[9px] sm:text-[10px] font-bold rounded-full">
                     {checkedInPct}% attendance
                   </span>
@@ -750,15 +807,15 @@ const SalesDashboardPage: React.FC = () => {
 
             {/* Body */}
             <div className="overflow-y-auto flex-1">
-              {loadingActiveReps ? (
+              {loadingActiveMembers ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                   <div className="animate-spin rounded-full h-10 w-10 border-2 border-purple-500 border-t-transparent mb-4" />
-                  <p className="text-sm">Loading checked-in reps...</p>
+                  <p className="text-sm">Loading checked-in members...</p>
                 </div>
-              ) : activeSalesReps.length === 0 ? (
+              ) : activeTeamMembers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                   <AlertCircleIcon className="h-10 w-10 mb-3 opacity-40" />
-                  <p className="text-sm font-medium">No reps have checked in today</p>
+                  <p className="text-sm font-medium">No team members have checked in today</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -771,22 +828,22 @@ const SalesDashboardPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {activeSalesReps.map((rep, idx) => {
-                        const checkInTime = rep.checkInTime
-                          ? new Date(rep.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      {activeTeamMembers.map((member, idx) => {
+                        const checkInTime = member.checkInTime
+                          ? new Date(member.checkInTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                           : '—';
-                        const isEarly = rep.checkInTime
-                          ? new Date(rep.checkInTime).getHours() < 8
+                        const isEarly = member.checkInTime
+                          ? new Date(member.checkInTime).getHours() < 8
                           : false;
                         return (
-                          <tr key={rep.id} className="hover:bg-purple-50/50 transition-colors">
+                          <tr key={member.id} className="hover:bg-purple-50/50 transition-colors">
                             <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-400 w-6 sm:w-8">{idx + 1}</td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3">
                               <div className="flex items-center gap-1.5 sm:gap-2">
                                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 text-[9px] sm:text-[10px] font-bold flex-shrink-0">
-                                  {rep.name.charAt(0).toUpperCase()}
+                                  {member.name.charAt(0).toUpperCase()}
                                 </div>
-                                <span className="text-[10px] sm:text-xs text-gray-800 font-medium truncate max-w-[100px] sm:max-w-none">{rep.name}</span>
+                                <span className="text-[10px] sm:text-xs text-gray-800 font-medium truncate max-w-[100px] sm:max-w-none">{member.name}</span>
                               </div>
                             </td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3">
@@ -794,8 +851,8 @@ const SalesDashboardPage: React.FC = () => {
                                 {checkInTime}
                               </span>
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{rep.route_name || '—'}</td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{rep.region_name || '—'}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{member.route_name || '—'}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-none">{member.region_name || '—'}</td>
                           </tr>
                         );
                       })}
@@ -808,13 +865,13 @@ const SalesDashboardPage: React.FC = () => {
             {/* Footer */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-0 px-4 sm:px-6 py-3 bg-gray-50 border-t border-gray-100 flex-shrink-0">
               <button
-                onClick={() => { setActiveRepsModalOpen(false); navigate('/sales-reps', { state: { filterStatus: '1' } }); }}
+                onClick={() => { setActiveMembersModalOpen(false); navigate('/sales-reps', { state: { filterStatus: '1' } }); }}
                 className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 border border-purple-200 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-medium text-purple-700 bg-white hover:bg-purple-50 transition-colors"
               >
-                View All Active Reps <ChevronRightIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                View All Active Members <ChevronRightIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </button>
               <button
-                onClick={() => setActiveRepsModalOpen(false)}
+                onClick={() => setActiveMembersModalOpen(false)}
                 className="px-4 sm:px-5 py-2 text-[10px] sm:text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg sm:rounded-xl transition-all shadow-sm"
               >
                 Close
@@ -827,4 +884,4 @@ const SalesDashboardPage: React.FC = () => {
   );
 };
 
-export default SalesDashboardPage;
+export default TeamLeaderDashboardPage;

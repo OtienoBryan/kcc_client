@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { salesService, SalesRep } from '../services/salesService';
 import { saveAs } from 'file-saver';
+import { useAuth } from '../contexts/AuthContext';
+import { API_CONFIG } from '../config/api';
 import { 
   Calendar, 
   User, 
   Clock, 
-  FileText, 
   Paperclip,
   Filter,
   Download,
@@ -16,9 +17,25 @@ import {
   Clock as ClockSolid
 } from 'lucide-react';
 
+// Configure axios to include auth token
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 interface Leave {
   id: number;
   userId: number;
+  userName?: string;
   leaveType: string;
   startDate: string;
   endDate: string;
@@ -30,6 +47,7 @@ interface Leave {
 }
 
 const SalesRepLeavesPage: React.FC = () => {
+  const { user } = useAuth();
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
   const [selectedRep, setSelectedRep] = useState<string>('');
@@ -49,21 +67,50 @@ const SalesRepLeavesPage: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(5);
 
   useEffect(() => {
-    salesService.getAllSalesReps().then(setSalesReps);
-  }, []);
+    const fetchSalesReps = async () => {
+      try {
+        // If user is a leader, filter by leader_id
+        if (user?.role === 'leader' && user?.id) {
+          const response = await axios.get(`${API_CONFIG.getUrl('/sales-reps')}?status=1&leader_id=${user.id}`);
+          const data = response.data;
+          setSalesReps(data.success ? data.data : (Array.isArray(data) ? data : []));
+        } else {
+          const reps = await salesService.getAllSalesReps();
+          setSalesReps(reps);
+        }
+      } catch (error) {
+        console.error('Failed to fetch sales reps:', error);
+        setSalesReps([]);
+      }
+    };
+    fetchSalesReps();
+  }, [user?.role, user?.id]);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
+    // Build URL with team_leader_id filter if user is a leader
+    const url = user?.role === 'leader' && user?.id
+      ? `${API_CONFIG.getUrl('/sales-rep-leaves/sales-rep-leaves')}?team_leader_id=${user.id}`
+      : API_CONFIG.getUrl('/sales-rep-leaves/sales-rep-leaves');
     axios
-      .get('/api/sales-rep-leaves/sales-rep-leaves')
+      .get(url)
       .then(res => setLeaves(res.data))
       .catch(err => setError(err.message || 'Failed to fetch leaves'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.role, user?.id]);
 
   const filteredLeaves = leaves.filter(leave => {
-    const statusMatch = !statusFilter || String(leave.status) === statusFilter;
+    // If user is a leader, only show leaves for assigned sales reps
+    if (user?.role === 'leader' && user?.id) {
+      const rep = salesReps.find(r => r.id === leave.userId);
+      if (!rep) return false; // Hide if sales rep is not in the assigned list
+    }
+    
+    // Handle both string and number status values
+    const leaveStatusNum = typeof leave.status === 'string' ? parseInt(leave.status, 10) : leave.status;
+    const statusFilterNum = statusFilter ? (typeof statusFilter === 'string' ? parseInt(statusFilter, 10) : statusFilter) : null;
+    const statusMatch = !statusFilter || leaveStatusNum === statusFilterNum;
     let dateMatch = true;
     if (startDateFilter) {
       dateMatch = dateMatch && new Date(leave.startDate) >= new Date(startDateFilter);
@@ -77,10 +124,23 @@ const SalesRepLeavesPage: React.FC = () => {
 
   const handleUpdateStatus = async (leaveId: number, newStatus: number) => {
     try {
-      await axios.patch(`/api/sales-rep-leaves/${leaveId}/status`, { status: newStatus });
-      setLeaves((prev) => prev.map(l => l.id === leaveId ? { ...l, status: String(newStatus) } : l));
-    } catch (err) {
-      alert('Failed to update status');
+      console.log('Updating leave status:', { leaveId, newStatus });
+      const response = await axios.patch(API_CONFIG.getUrl(`/sales-rep-leaves/${leaveId}/status`), { status: newStatus });
+      console.log('Update response:', response.data);
+      if (response.data.success) {
+        // Refresh leaves data to get updated status
+        const url = user?.role === 'leader' && user?.id
+          ? `${API_CONFIG.getUrl('/sales-rep-leaves/sales-rep-leaves')}?team_leader_id=${user.id}`
+          : API_CONFIG.getUrl('/sales-rep-leaves/sales-rep-leaves');
+        const leavesResponse = await axios.get(url);
+        console.log('Refreshed leaves data:', leavesResponse.data);
+        setLeaves(leavesResponse.data);
+      } else {
+        alert('Failed to update status');
+      }
+    } catch (err: any) {
+      console.error('Error updating leave status:', err);
+      alert(err.response?.data?.error || err.message || 'Failed to update status');
     }
   };
 
@@ -125,7 +185,7 @@ const SalesRepLeavesPage: React.FC = () => {
       leave.endDate,
       leave.reason,
       leave.attachment || '',
-      String(leave.status) === '1' ? 'Approved' : String(leave.status) === '3' ? 'Declined' : 'Pending'
+      (Number(leave.status) === 1) ? 'Approved' : (Number(leave.status) === 2) ? 'Declined' : 'Pending'
     ]);
     const csvContent = [headers, ...rows]
       .map(row => row.map(field => '"' + String(field).replace(/"/g, '""') + '"').join(','))
@@ -134,16 +194,19 @@ const SalesRepLeavesPage: React.FC = () => {
     saveAs(blob, 'sales_rep_leaves.csv');
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case '1':
+  const getStatusBadge = (status: string | number) => {
+    // Convert to number for comparison
+    const statusNum = typeof status === 'string' ? parseInt(status, 10) : status;
+    
+    switch (statusNum) {
+      case 1:
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800">
             <CheckCircle className="h-3 w-3 mr-0.5" />
             Approved
           </span>
         );
-      case '3':
+      case 2:
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800">
             <XCircle className="h-3 w-3 mr-0.5" />
@@ -193,76 +256,100 @@ const SalesRepLeavesPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
       {/* Header Section */}
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         <div className="mb-6">
           <h1 className="text-xl font-bold text-gray-900 mb-1">Sales Rep Leaves</h1>
           <p className="text-sm text-gray-600">Manage and review leave requests from sales representatives</p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-          <div className="bg-white rounded-md shadow-sm p-2.5 border-l-4 border-green-500">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-6 h-6 bg-green-100 rounded-md flex items-center justify-center">
-                  <Clock className="h-3.5 w-3.5 text-green-600" />
-                </div>
-              </div>
-              <div className="ml-2">
-                <p className="text-[10px] font-medium text-gray-500">Total Leaves</p>
-                <p className="text-base font-semibold text-gray-900">{leaves.length}</p>
-              </div>
-            </div>
-          </div>
+         {/* Stats Cards */}
+         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+           <div 
+             className={`bg-white rounded-md shadow-sm p-2.5 border-l-4 border-green-500 cursor-pointer transition-all duration-200 hover:shadow-md ${!statusFilter ? 'ring-2 ring-green-500 ring-offset-2' : ''}`}
+             onClick={() => {
+               setStatusFilter('');
+               setCurrentPage(1);
+             }}
+           >
+             <div className="flex items-center">
+               <div className="flex-shrink-0">
+                 <div className="w-6 h-6 bg-green-100 rounded-md flex items-center justify-center">
+                   <Clock className="h-3.5 w-3.5 text-green-600" />
+                 </div>
+               </div>
+               <div className="ml-2">
+                 <p className="text-[10px] font-medium text-gray-500">Total Leaves</p>
+                 <p className="text-base font-semibold text-gray-900">{leaves.length}</p>
+               </div>
+             </div>
+           </div>
 
-          <div className="bg-white rounded-md shadow-sm p-2.5 border-l-4 border-yellow-500">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-6 h-6 bg-yellow-100 rounded-md flex items-center justify-center">
-                  <ClockSolid className="h-3.5 w-3.5 text-yellow-600" />
-                </div>
-              </div>
-              <div className="ml-2">
-                <p className="text-[10px] font-medium text-gray-500">Pending</p>
-                <p className="text-base font-semibold text-gray-900">
-                  {leaves.filter(l => l.status === '0').length}
-                </p>
-              </div>
-            </div>
-          </div>
+           <div 
+             className={`bg-white rounded-md shadow-sm p-2.5 border-l-4 border-yellow-500 cursor-pointer transition-all duration-200 hover:shadow-md ${statusFilter === '0' ? 'ring-2 ring-yellow-500 ring-offset-2' : ''}`}
+             onClick={() => {
+               setStatusFilter('0');
+               setCurrentPage(1);
+             }}
+           >
+             <div className="flex items-center">
+               <div className="flex-shrink-0">
+                 <div className="w-6 h-6 bg-yellow-100 rounded-md flex items-center justify-center">
+                   <ClockSolid className="h-3.5 w-3.5 text-yellow-600" />
+                 </div>
+               </div>
+               <div className="ml-2">
+                 <p className="text-[10px] font-medium text-gray-500">Pending</p>
+                 <p className="text-base font-semibold text-gray-900">
+                   {leaves.filter(l => String(l.status) === '0').length}
+                 </p>
+               </div>
+             </div>
+           </div>
 
-          <div className="bg-white rounded-md shadow-sm p-2.5 border-l-4 border-green-500">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-6 h-6 bg-green-100 rounded-md flex items-center justify-center">
-                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                </div>
-              </div>
-              <div className="ml-2">
-                <p className="text-[10px] font-medium text-gray-500">Approved</p>
-                <p className="text-base font-semibold text-gray-900">
-                  {leaves.filter(l => l.status === '1').length}
-                </p>
-              </div>
-            </div>
-          </div>
+           <div 
+             className={`bg-white rounded-md shadow-sm p-2.5 border-l-4 border-green-500 cursor-pointer transition-all duration-200 hover:shadow-md ${Number(statusFilter) === 1 ? 'ring-2 ring-green-500 ring-offset-2' : ''}`}
+             onClick={() => {
+               setStatusFilter('1');
+               setCurrentPage(1);
+             }}
+           >
+             <div className="flex items-center">
+               <div className="flex-shrink-0">
+                 <div className="w-6 h-6 bg-green-100 rounded-md flex items-center justify-center">
+                   <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                 </div>
+               </div>
+               <div className="ml-2">
+                 <p className="text-[10px] font-medium text-gray-500">Approved</p>
+                 <p className="text-base font-semibold text-gray-900">
+                   {leaves.filter(l => Number(l.status) === 1).length}
+                 </p>
+               </div>
+             </div>
+           </div>
 
-          <div className="bg-white rounded-md shadow-sm p-2.5 border-l-4 border-red-500">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-6 h-6 bg-red-100 rounded-md flex items-center justify-center">
-                  <XCircle className="h-3.5 w-3.5 text-red-600" />
-                </div>
-              </div>
-              <div className="ml-2">
-                <p className="text-[10px] font-medium text-gray-500">Declined</p>
-                <p className="text-base font-semibold text-gray-900">
-                  {leaves.filter(l => l.status === '3').length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+           <div 
+             className={`bg-white rounded-md shadow-sm p-2.5 border-l-4 border-red-500 cursor-pointer transition-all duration-200 hover:shadow-md ${Number(statusFilter) === 2 ? 'ring-2 ring-red-500 ring-offset-2' : ''}`}
+             onClick={() => {
+               setStatusFilter('2');
+               setCurrentPage(1);
+             }}
+           >
+             <div className="flex items-center">
+               <div className="flex-shrink-0">
+                 <div className="w-6 h-6 bg-red-100 rounded-md flex items-center justify-center">
+                   <XCircle className="h-3.5 w-3.5 text-red-600" />
+                 </div>
+               </div>
+               <div className="ml-2">
+                 <p className="text-[10px] font-medium text-gray-500">Declined</p>
+                 <p className="text-base font-semibold text-gray-900">
+                   {leaves.filter(l => Number(l.status) === 2).length}
+                 </p>
+               </div>
+             </div>
+           </div>
+         </div>
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -344,7 +431,7 @@ const SalesRepLeavesPage: React.FC = () => {
                             </div>
                             <div className="ml-2">
                               <div className="text-xs font-medium text-gray-900">
-                                {rep ? rep.name : `User ${leave.userId}`}
+                                {rep ? rep.name : (leave.userName || `User ${leave.userId}`)}
                               </div>
                               <div className="text-[10px] text-gray-500">Sales Rep</div>
                             </div>
@@ -420,7 +507,7 @@ const SalesRepLeavesPage: React.FC = () => {
 
                         {/* Actions */}
                         <td className="px-4 py-3 whitespace-nowrap">
-                          {String(leave.status) !== '1' && (
+                          {Number(leave.status) === 0 && (
                             <div className="flex gap-1.5">
                               <button
                                 className="inline-flex items-center px-2 py-1 border border-transparent text-[10px] font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
@@ -429,15 +516,13 @@ const SalesRepLeavesPage: React.FC = () => {
                                 <CheckCircle className="h-3 w-3 mr-0.5" />
                                 Approve
                               </button>
-                              {String(leave.status) !== '3' && (
-                                <button
-                                  className="inline-flex items-center px-2 py-1 border border-transparent text-[10px] font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                                  onClick={() => handleUpdateStatus(leave.id, 3)}
-                                >
-                                  <XCircle className="h-3 w-3 mr-0.5" />
-                                  Decline
-                                </button>
-                              )}
+                              <button
+                                className="inline-flex items-center px-2 py-1 border border-transparent text-[10px] font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                onClick={() => handleUpdateStatus(leave.id, 2)}
+                              >
+                                <XCircle className="h-3 w-3 mr-0.5" />
+                                Decline
+                              </button>
                             </div>
                           )}
                         </td>
@@ -580,7 +665,7 @@ const SalesRepLeavesPage: React.FC = () => {
                     <option value="">All Statuses</option>
                     <option value="0">Pending</option>
                     <option value="1">Approved</option>
-                    <option value="3">Declined</option>
+                     <option value="2">Declined</option>
                   </select>
                 </div>
 

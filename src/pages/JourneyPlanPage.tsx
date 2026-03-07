@@ -5,6 +5,7 @@ import CreateJourneyPlanModal from '../components/CreateJourneyPlanModal';
 import PendingJourneyPlansModal from '../components/PendingJourneyPlansModal';
 import SalesRepJourneyPlansModal from '../components/SalesRepJourneyPlansModal';
 import { getWithAuth } from '../utils/fetchWithAuth';
+import { useAuth } from '../contexts/AuthContext';
 
 // Country flag image mapping
 const getCountryFlag = (countryName: string): string | null => {
@@ -126,6 +127,7 @@ interface JourneyPlan {
 
 const JourneyPlanPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
   const [journeyPlans, setJourneyPlans] = useState<JourneyPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,10 +155,20 @@ const JourneyPlanPage: React.FC = () => {
 
   const fetchSalesReps = useCallback(async () => {
     try {
-      // Fetch active sales reps (status = 1) with country filter
-      const url = selectedCountry && selectedCountry !== ''
-        ? `/api/sales-reps?status=1&country=${encodeURIComponent(selectedCountry)}`
-        : '/api/sales-reps?status=1';
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('status', '1');
+      
+      if (selectedCountry && selectedCountry !== '') {
+        params.append('country', selectedCountry);
+      }
+      
+      // If user is a leader, filter by leader_id
+      if (user?.role === 'leader' && user?.id) {
+        params.append('leader_id', user.id.toString());
+      }
+      
+      const url = `/api/sales-reps?${params.toString()}`;
       const response = await getWithAuth(url);
       const data: any = await response.json();
       if (data.success) {
@@ -167,15 +179,24 @@ const JourneyPlanPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch sales reps:', error);
     }
-  }, [selectedCountry]);
+  }, [selectedCountry, user?.role, user?.id]);
 
   const fetchJourneyPlans = useCallback(async () => {
     try {
-      // Fetch journey plans with country filter and limit to recent 50 for performance
-      // Since the journey plans section is hidden, we only need minimal data
-      const url = selectedCountry && selectedCountry !== ''
-        ? `/api/journey-plans?country=${encodeURIComponent(selectedCountry)}&limit=50`
-        : '/api/journey-plans?limit=50';
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('limit', '50');
+      
+      if (selectedCountry && selectedCountry !== '') {
+        params.append('country', selectedCountry);
+      }
+      
+      // If user is a leader, filter by team_leader_id
+      if (user?.role === 'leader' && user?.id) {
+        params.append('team_leader_id', user.id.toString());
+      }
+      
+      const url = `/api/journey-plans?${params.toString()}`;
       const response = await getWithAuth(url);
       const data: any = await response.json();
       const rawPlans = Array.isArray(data) ? data : (data?.data ?? []);
@@ -183,7 +204,7 @@ const JourneyPlanPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch journey plans:', error);
     }
-  }, [selectedCountry]);
+  }, [selectedCountry, user?.role, user?.id]);
 
   // Load countries in parallel with other data
   useEffect(() => {

@@ -43,6 +43,8 @@ const LoginPage: React.FC = () => {
           login(response.data.token, response.data.user);
           if (response.data.user.role === 'sales') {
             navigate('/sales-dashboard', { replace: true });
+          } else if (response.data.user.role === 'leader') {
+            navigate('/team-leader-dashboard', { replace: true });
           } else if (response.data.user.role === 'hr') {
             navigate('/hr-dashboard', { replace: true });
           } else if (response.data.user.role === 'stock') {
